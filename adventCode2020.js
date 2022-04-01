@@ -969,14 +969,108 @@ function countCubesIn4DPocketDimension(grid) {
 const day18_expressions = fs.readFileSync('./2020/day18.txt', 'utf-8').split('\n');
 
 function evaluateExpressions(expressions) {
+  const NUMS_REGEX = /[0-9]/g;
+  const SIGNS_REGEX = /\*|\+|\(|\)/g;
   let sum = 0;
   expressions.forEach(ex => {
-    // ???
-  })
+    let nums = ex.match(NUMS_REGEX).map(Number);
+    let signs = ex.match(SIGNS_REGEX);
+    while (signs.length > 0 || nums.length > 1) {
+      if ((signs[0] === '+' || signs[0] === '*') && (!signs[1] || signs[1] !== '(')) {
+        const res = eval(`${nums[0]} ${signs[0]} ${nums[1]}`);
+        nums.shift();
+        nums[0] = res;
+        signs.shift();
+      } else if (signs[0] === '(' || signs[1] === '(') {
+        let openIndex, closeIndex;
+        for (let i = 0; i < signs.length; i++) {
+          if (signs[i] === '(') openIndex = i;
+          if (signs[i] === ')') {
+            closeIndex = i;
+            break;
+          }
+        }
+        let numId = 0
+        for (let i = 0; i <= openIndex; i++) {
+          if (signs[i] === '+' || signs[i] === '*') numId++;
+        }
+        const res = eval(`${nums[numId]} ${signs[openIndex + 1]} ${nums[numId+1]}`);
+        nums.splice(numId, 2, res) //replace two nums with result
+        if (closeIndex - openIndex === 2) {
+          signs.splice(openIndex, 3);
+        } else {
+          signs.splice(openIndex + 1, 1);
+        }
+      }
+    }
+    sum += nums[0];
+  });
+  console.log(sum);
 }
 
+function evaluateAdvancedExpressions(expressions) {
+  const NUMS_REGEX = /[0-9]/g;
+  const SIGNS_REGEX = /\*|\+|\(|\)/g;
+  let sum = 0;
+  expressions.forEach(ex => {
+    let nums = ex.match(NUMS_REGEX).map(Number);
+    let signs = ex.match(SIGNS_REGEX);
+    while (signs.length > 0 || nums.length > 2) {
+      if ((signs[0] === '*') && (!signs[1] || (signs[1] !== '(' && signs[1] !== '+'))) {
+        const res = eval(`${nums[0]} ${signs[0]} ${nums[1]}`);
+        nums.shift();
+        nums[0] = res;
+        signs.shift();
+      } else if ((signs[0] === '+') && (!signs[1] || signs[1] !== '(')) {
+        const res = eval(`${nums[0]} ${signs[0]} ${nums[1]}`);
+        nums.shift();
+        nums[0] = res;
+        signs.shift();
+      } else if ((signs[1] === '+') && (!signs[2] || signs[2] !== '(') && signs[0] !== '(') {
+        const res = eval(`${nums[1]} ${signs[1]} ${nums[2]}`);
+        nums.splice(1, 2, res);
+        signs.splice(1, 1);
+      } else if (signs[0] === '(' || signs[1] === '(' || signs[2] === '(') {
 
+        let openIndex, closeIndex;
+        for (let i = 0; i < signs.length; i++) {
+          if (signs[i] === '(') openIndex = i;
+          if (signs[i] === ')') {
+            closeIndex = i;
+            break;
+          }
+        }
+        const exInsideParenthesis = signs.slice(openIndex, closeIndex + 1);
+        let numId = 0
+        let signId = openIndex + 1;
+        if (exInsideParenthesis.includes('+')) {
+          for (let i = 0; i <= signs.length; i++) {
+            if (signs[i] === '+' && i > openIndex) {
+              signId = i;
+              break;
+            };
+            if (signs[i] === '+' || signs[i] === '*') numId++;
+          }
+        } else {
+          for (let i = 0; i <= openIndex; i++) {
+            if (signs[i] === '+' || signs[i] === '*') numId++;
+          }
+        }
+        const res = eval(`${nums[numId]} ${signs[signId]} ${nums[numId+1]}`);
+        nums.splice(numId, 2, res);
+        if (closeIndex - openIndex === 2) {
+          signs.splice(openIndex, 3);
+        } else {
+          signs.splice(signId, 1);
+        }
+      }
+    }
+    sum += nums[0];
+  });
+  console.log(sum);
+}
 
+//Day 19
 
 
 
@@ -1012,10 +1106,10 @@ function evaluateExpressions(expressions) {
 // console.log('Day 6, part 2:');
 // getAnswersWhereEveryoneSaidYes(day6_answers);
 
-console.log('Day 7, part 1:');
-checkBagsInsides(day7_bags)
-console.log('Day 7, part 2:');
-countNeededBags(day7_bags);
+// console.log('Day 7, part 1:');
+// checkBagsInsides(day7_bags)
+// console.log('Day 7, part 2:');
+// countNeededBags(day7_bags);
 
 // console.log('Day 8, part 1:');
 // findInfiniteLoop(day8_instructions, true);
@@ -1066,3 +1160,8 @@ countNeededBags(day7_bags);
 // countCubesIn3DPocketDimension(day17_grid);
 // console.log('Day 17, part 2:');
 // countCubesIn4DPocketDimension(day17_grid);
+
+// console.log('Day 18, part 1:');
+// evaluateExpressions(day18_expressions);
+// console.log('Day 18, part 2:');
+// evaluateAdvancedExpressions(day18_expressions);

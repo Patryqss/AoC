@@ -3,13 +3,13 @@ This repository contains my solutions to puzzles available on https://adventofco
 
 ### My progress so far:
 ```
-[2021] 22*
-[2020] 34*
+[2021] 34*
+[2020] 36*
 [2019] 28*
-[2018] 30*
-[2017] 38*
+[2018] 38*
+[2017] 40*
 [2016] 32*
-[2015] 28*
-```
+[2015] 37*
 
-More detailed file yet to come
+Total stars: 245*/350*
+```

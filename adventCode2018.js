@@ -1108,6 +1108,623 @@ function findOptimalAtkPower(battlefield) {
   console.log(score);
 }
 
+//Day 16
+let [day16_samples, day16_opcodes] = fs.readFileSync('./2018/day16.txt', 'utf-8').split('\n\n\n\n');
+day16_samples = day16_samples.split('\n\n');
+day16_opcodes = day16_opcodes.split('\n');
+
+class RegisterProgram {
+  // Used in Day 16 & Day 19
+  constructor(instruction, input, expectedOutput) {
+    this.instruction = instruction;
+    this.input = input;
+    this.expectedOutput = expectedOutput;
+    this.matching = 0;
+    this.lastMatched = null;
+  }
+
+  getMatching() {
+    return { count: this.matching, last: this.lastMatched };
+  }
+  setInput(newInput) {
+    this.input = newInput;
+  }
+  setInstruction(newInst) {
+    this.instruction = newInst;
+  }
+  op0() { //addr
+    const output = [...this.input];
+    output[this.instruction[3]] = output[this.instruction[1]] + output[this.instruction[2]];
+    return output;
+  }
+  op1() { //addi
+    const output = [...this.input];
+    output[this.instruction[3]] = output[this.instruction[1]] + this.instruction[2];
+    return output;
+  }
+  op2() { //mulr
+    const output = [...this.input];
+    output[this.instruction[3]] = output[this.instruction[1]] * output[this.instruction[2]];
+    return output;
+  }
+  op3() { //muli
+    const output = [...this.input];
+    output[this.instruction[3]] = output[this.instruction[1]] * this.instruction[2];
+    return output;
+  }
+  op4() { //banr
+    const output = [...this.input];
+    output[this.instruction[3]] = output[this.instruction[1]] & output[this.instruction[2]];
+    return output;
+  }
+  op5() { //bani
+    const output = [...this.input];
+    output[this.instruction[3]] = output[this.instruction[1]] & this.instruction[2];
+    return output;
+  }
+  op6() { //borr
+    const output = [...this.input];
+    output[this.instruction[3]] = output[this.instruction[1]] | output[this.instruction[2]];
+    return output;
+  }
+  op7() { //bori
+    const output = [...this.input];
+    output[this.instruction[3]] = output[this.instruction[1]] | this.instruction[2];
+    return output;
+  }
+  op8() { //setr
+    const output = [...this.input];
+    output[this.instruction[3]] = output[this.instruction[1]];
+    return output;
+  }
+  op9() { //seti
+    const output = [...this.input];
+    output[this.instruction[3]] = this.instruction[1];
+    return output;
+  }
+  op10() { //gtir
+    const output = [...this.input];
+    output[this.instruction[3]] = this.instruction[1] > output[this.instruction[2]] ? 1 : 0;
+    return output;
+  }
+  op11() { //gtri
+    const output = [...this.input];
+    output[this.instruction[3]] = output[this.instruction[1]] > this.instruction[2] ? 1 : 0;
+    return output;
+  }
+  op12() { //gtrr
+    const output = [...this.input];
+    output[this.instruction[3]] = output[this.instruction[1]] > output[this.instruction[2]] ? 1 : 0;
+    return output;
+  }
+  op13() { //eqir
+    const output = [...this.input];
+    output[this.instruction[3]] = this.instruction[1] === output[this.instruction[2]] ? 1 : 0;
+    return output;
+  }
+  op14() { //eqri
+    const output = [...this.input];
+    output[this.instruction[3]] = output[this.instruction[1]] === this.instruction[2] ? 1 : 0;
+    return output;
+  }
+  op15() { //eqrr
+    const output = [...this.input];
+    output[this.instruction[3]] = output[this.instruction[1]] === output[this.instruction[2]] ? 1 : 0;
+    return output;
+  }
+  runOpByName(name) {
+    const ops = ['addr', 'addi', 'mulr', 'muli', 'banr', 'bani', 'borr', 'bori', 'setr', 'seti', 'gtir', 'gtri', 'gtrr', 'eqir', 'eqri', 'eqrr'];
+    const opNum = ops.indexOf(name);
+    return this[`op${opNum}`]();
+  }
+  updateInstructionPointer(pointerIndex) {
+    this.input[pointerIndex]++;
+    return this.input[pointerIndex];
+  }
+  checkMatchingInstructions(exclude = []) {
+    for (let i = 0; i < 16; i++) {
+      if (!exclude.includes(i) && this[`op${i}`]().join(',') === this.expectedOutput.join(',')) {
+        this.matching++;
+        this.lastMatched = i;
+      }
+    }
+  }
+}
+
+function checkSamples(samples) {
+  const NUMBER_REGEX = /[0-9]+/g;
+  let matchin3OrMore = 0;
+  samples.forEach(s => {
+    const [input, instruction, output] = s.split('\n').map(x => x.match(NUMBER_REGEX).map(Number));
+    const compareMachine = new RegisterProgram(instruction, input, output);
+    compareMachine.checkMatchingInstructions();
+    if (compareMachine.getMatching().count >= 3) matchin3OrMore++;
+  })
+  console.log(matchin3OrMore);
+}
+
+function workoutRegistersAndExecuteProgram(samples, opcodes) {
+  const NUMBER_REGEX = /[0-9]+/g;
+  const decodedOps = {};
+  while (Object.keys(decodedOps).length < 15) {
+    samples.forEach(s => {
+      const [input, instruction, output] = s.split('\n').map(x => x.match(NUMBER_REGEX).map(Number));
+      const compareMachine = new RegisterProgram(instruction, input, output);
+      compareMachine.checkMatchingInstructions(Object.values(decodedOps).map(Number));
+      if (compareMachine.getMatching().count === 1) {
+        decodedOps[instruction[0]] = compareMachine.getMatching().last
+      }
+    })
+  }
+
+  let output;
+  const register = new RegisterProgram(null, [0, 0, 0, 0], null);
+  opcodes.forEach(opcode => {
+    const inst = opcode.match(NUMBER_REGEX).map(Number);
+    const operation = decodedOps[inst[0]];
+    register.setInstruction(inst);
+    output = register[`op${operation}`]();
+    register.setInput(output);
+  })
+  console.log(output[0]);
+}
+
+//Day 17
+const day17_clay = fs.readFileSync('./2018/day17.txt', 'utf-8').split('\n');
+
+function findPockets(coords) {
+  let c = [...coords];
+  const pockets = [];
+  while (c.length > 0) {
+    let possiblePocket = [c[0].split('x').map(Number)];
+    let toRemove = false;
+    if (c.includes(`${possiblePocket[0][0]}x${possiblePocket[0][1] + 1}`)) {
+      // going down, then right/left, then up
+      possiblePocket.push([possiblePocket[0][0], possiblePocket[0][1] + 1]);
+      while (c.includes(`${possiblePocket[possiblePocket.length - 1][0]}x${possiblePocket[possiblePocket.length - 1][1] + 1}`)) {
+        //go down
+        possiblePocket.push([possiblePocket[possiblePocket.length - 1][0], possiblePocket[possiblePocket.length - 1][1] + 1]);
+      }
+
+      if (c.includes(`${possiblePocket[possiblePocket.length - 1][0] + 1}x${possiblePocket[possiblePocket.length - 1][1]}`)) {
+        //go right
+        possiblePocket.push([possiblePocket[possiblePocket.length - 1][0] + 1, possiblePocket[possiblePocket.length - 1][1]]);
+        while (c.includes(`${possiblePocket[possiblePocket.length - 1][0] + 1}x${possiblePocket[possiblePocket.length - 1][1]}`)) {
+          possiblePocket.push([possiblePocket[possiblePocket.length - 1][0] + 1, possiblePocket[possiblePocket.length - 1][1]]);
+        }
+      } else if (c.includes(`${possiblePocket[possiblePocket.length - 1][0] - 1}x${possiblePocket[possiblePocket.length - 1][1]}`)) {
+        //go left
+        possiblePocket.push([possiblePocket[possiblePocket.length - 1][0] - 1, possiblePocket[possiblePocket.length - 1][1]]);
+        while (c.includes(`${possiblePocket[possiblePocket.length - 1][0] - 1}x${possiblePocket[possiblePocket.length - 1][1]}`)) {
+          possiblePocket.push([possiblePocket[possiblePocket.length - 1][0] - 1, possiblePocket[possiblePocket.length - 1][1]]);
+        }
+      } else {
+        //no bottom, remove
+        toRemove = true
+      }
+
+      if (!toRemove && c.includes(`${possiblePocket[possiblePocket.length - 1][0]}x${possiblePocket[possiblePocket.length - 1][1] - 1}`)) {
+        //go up
+        possiblePocket.push([possiblePocket[possiblePocket.length - 1][0], possiblePocket[possiblePocket.length - 1][1] -1]);
+        while (c.includes(`${possiblePocket[possiblePocket.length - 1][0]}x${possiblePocket[possiblePocket.length - 1][1] - 1}`)) {
+          possiblePocket.push([possiblePocket[possiblePocket.length - 1][0], possiblePocket[possiblePocket.length - 1][1] - 1]);
+        }
+      } else {
+        //no up, remove
+        toRemove = true
+      }
+
+    } else if (c.includes(`${possiblePocket[0][0]}x${possiblePocket[0][1] - 1}`)) {
+      // going up then come back, go right/left, then up
+
+      possiblePocket.push([possiblePocket[0][0], possiblePocket[0][1] - 1]);
+      while (c.includes(`${possiblePocket[possiblePocket.length - 1][0]}x${possiblePocket[possiblePocket.length - 1][1] - 1}`)) {
+        //go up
+        possiblePocket.push([possiblePocket[possiblePocket.length - 1][0], possiblePocket[possiblePocket.length - 1][1] - 1]);
+      }
+
+      if (c.includes(`${possiblePocket[0][0] + 1}x${possiblePocket[0][1]}`)) {
+        //go right
+        possiblePocket.push([possiblePocket[0][0] + 1, possiblePocket[0][1]]);
+        while (c.includes(`${possiblePocket[possiblePocket.length - 1][0] + 1}x${possiblePocket[possiblePocket.length - 1][1]}`)) {
+          possiblePocket.push([possiblePocket[possiblePocket.length - 1][0] + 1, possiblePocket[possiblePocket.length - 1][1]]);
+        }
+      } else if (c.includes(`${possiblePocket[0][0] - 1}x${possiblePocket[0][1]}`)) {
+        //go left
+        possiblePocket.push([possiblePocket[0][0] - 1, possiblePocket[0][1]]);
+        while (c.includes(`${possiblePocket[possiblePocket.length - 1][0] - 1}x${possiblePocket[possiblePocket.length - 1][1]}`)) {
+          possiblePocket.push([possiblePocket[possiblePocket.length - 1][0] - 1, possiblePocket[possiblePocket.length - 1][1]]);
+        }
+      } else {
+        //no bottom, remove
+        toRemove = true
+      }
+
+      if (!toRemove && c.includes(`${possiblePocket[possiblePocket.length - 1][0]}x${possiblePocket[possiblePocket.length - 1][1] - 1}`)) {
+        //go up
+        possiblePocket.push([possiblePocket[possiblePocket.length - 1][0], possiblePocket[possiblePocket.length - 1][1] -1]);
+        while (c.includes(`${possiblePocket[possiblePocket.length - 1][0]}x${possiblePocket[possiblePocket.length - 1][1] - 1}`)) {
+          possiblePocket.push([possiblePocket[possiblePocket.length - 1][0], possiblePocket[possiblePocket.length - 1][1] - 1]);
+        }
+      } else {
+        //no up, remove
+        toRemove = true
+      }
+
+    } else {
+      c.shift();
+      toRemove = true;
+    }
+
+    if (!toRemove) {
+      const maxX = Math.max(...possiblePocket.map(p => p[0]));
+      const minX = Math.min(...possiblePocket.map(p => p[0]));
+      const maxY = Math.max(...possiblePocket.map(p => p[1]));
+      let minY = Math.min(...possiblePocket.map(p => p[1]));
+      while (possiblePocket.map(p => p[1]).filter(y => y === minY).length !== 2) {
+        minY++;
+      }
+      const pocket = {minX, minY, maxX, maxY, id: pockets.length};
+      pockets.push(pocket);
+    }
+
+    c = c.filter(coord => {
+      const coordsInPocket = possiblePocket.map(cc => cc.join('x'))
+      return !coordsInPocket.includes(coord)
+    });
+  }
+  return pockets;
+}
+
+function simulateWaterFlow(clays) {
+  const NUMS_REGEX = /[0-9]+/g;
+  let waterY = 1;
+  let waterX = [500];
+  const clayPositions = [];
+  const waterReached = ['500x1'];
+  const waterSettled = [];
+  let biggestY = 0;
+  let biggestX = 0;
+  let smallestX = 99999;
+  clays.forEach(clay => {
+    const coords = clay.match(NUMS_REGEX).map(Number);
+    if (clay[0] === 'x') {
+      if (coords[0] > biggestX) biggestX = coords[0];
+      if (coords[0] < smallestX) smallestX = coords[0];
+      for (let y = coords[1]; y <= coords[2]; y++) {
+        if (y > biggestY) biggestY = y;
+        clayPositions.push(`${coords[0]}x${y}`);
+      }
+    } else {
+      if (coords[0] > biggestY) biggestY = coords[0];
+      for (let x = coords[1]; x <= coords[2]; x++) {
+        if (x > biggestX) biggestX = x;
+        if (x < smallestX) smallestX = x;
+        clayPositions.push(`${x}x${coords[0]}`);
+      }
+    }
+  });
+
+  const pockets = findPockets(clayPositions);
+
+  while (waterY < biggestY) {
+    const xInNextCheck = [];
+    waterX.forEach(x => {
+      const pocketBelow = pockets.find(pocket => pocket.minY === waterY + 1 && pocket.minX < x && pocket.maxX > x);
+      if (!clayPositions.includes(`${x}x${waterY + 1}`) && !pocketBelow) {
+        waterReached.push(`${x}x${waterY + 1}`);
+        xInNextCheck.push(x);
+      }
+      else if (pocketBelow) {
+        //fill pocket
+        let y = pocketBelow.maxY - 1
+        while (y >= pocketBelow.minY) {
+          waterReached.push(`${x}x${y}`);
+          waterSettled.push(`${x}x${y}`);
+          for (let currX = x - 1; currX > pocketBelow.minX; currX--) {
+            if (!clayPositions.includes(`${currX}x${y}`)) {
+              waterReached.push(`${currX}x${y}`);
+              waterSettled.push(`${currX}x${y}`);
+            } else {
+              break;
+            }
+          }
+          for (let currX = x + 1; currX < pocketBelow.maxX; currX++) {
+            if (!clayPositions.includes(`${currX}x${y}`)) {
+              waterReached.push(`${currX}x${y}`);
+              waterSettled.push(`${currX}x${y}`);
+            } else {
+              break;
+            }
+          }
+          y--;
+        }
+
+        let splitted = 0
+        const splittedWater = [];
+        //split to left
+        let currX = x;
+        while(currX >= pocketBelow.minX || (currX < pocketBelow.minX && clayPositions.includes(`${currX}x${waterY + 1}`))) {
+          if (!clayPositions.includes(`${currX - 1}x${waterY}`)) {
+            currX--;
+            splittedWater.push(`${currX}x${waterY}`);
+          } else {
+            break;
+          }
+        }
+        if (currX < pocketBelow.minX && !clayPositions.includes(`${currX}x${waterY + 1}`)) {
+          xInNextCheck.push(currX);
+          waterReached.push(`${currX}x${waterY + 1}`);
+          splitted++;
+        }
+        //split to right
+        currX = x;
+        while(currX <= pocketBelow.maxX || (currX > pocketBelow.maxX && clayPositions.includes(`${currX}x${waterY + 1}`))) {
+          if (!clayPositions.includes(`${currX + 1}x${waterY}`)) {
+            currX++;
+            splittedWater.push(`${currX}x${waterY}`);
+          } else {
+            break;
+          }
+        }
+        if (currX > pocketBelow.maxX && !clayPositions.includes(`${currX}x${waterY + 1}`)) {
+          xInNextCheck.push(currX);
+          waterReached.push(`${currX}x${waterY + 1}`);
+          splitted++;
+        }
+
+        if (splitted === 0) {
+          waterReached.push(...splittedWater);
+          waterSettled.push(...splittedWater);
+          waterSettled.push(`${x}x${waterY}`);
+          const newY = waterY - 1;
+            //split to left
+          let currX = x;
+          while(currX >= pocketBelow.minX || (currX < pocketBelow.minX && clayPositions.includes(`${currX}x${newY + 1}`))) {
+            if (!clayPositions.includes(`${currX - 1}x${newY}`)) {
+              currX--;
+              waterReached.push(`${currX}x${newY}`);
+            } else {
+              break;
+            }
+          }
+          if (currX < pocketBelow.minX && !clayPositions.includes(`${currX}x${newY + 1}`)) {
+            xInNextCheck.push(currX);
+            waterReached.push(`${currX}x${newY + 1}`);
+            waterReached.push(`${currX}x${newY + 2}`); //not safe for edge cases, but they're not in my input
+            splitted++;
+          }
+          //split to right
+          currX = x;
+          while(currX <= pocketBelow.maxX || (currX > pocketBelow.maxX && clayPositions.includes(`${currX}x${newY + 1}`))) {
+            if (!clayPositions.includes(`${currX + 1}x${newY}`)) {
+              currX++;
+              waterReached.push(`${currX}x${newY}`);
+            } else {
+              break;
+            }
+          }
+          if (currX > pocketBelow.maxX && !clayPositions.includes(`${currX}x${newY + 1}`)) {
+            xInNextCheck.push(currX);
+            waterReached.push(`${currX}x${newY + 1}`);
+            waterReached.push(`${currX}x${newY + 2}`); //same as above
+            splitted++;
+          }
+        } else {
+          waterReached.push(...splittedWater);
+        }
+
+      } else {
+        //found clay, has to split
+        //split to left
+        let currX = x;
+        while(clayPositions.includes(`${currX}x${waterY + 1}`)) {
+          if (!clayPositions.includes(`${currX - 1}x${waterY}`)) {
+            currX--;
+            waterReached.push(`${currX}x${waterY}`);
+          } else {
+            break;
+          }
+        }
+        if (!clayPositions.includes(`${currX}x${waterY + 1}`)) {
+          xInNextCheck.push(currX);
+          waterReached.push(`${currX}x${waterY + 1}`);
+        }
+        //split to right
+        currX = x;
+        while(clayPositions.includes(`${currX}x${waterY + 1}`)) {
+          if (!clayPositions.includes(`${currX + 1}x${waterY}`)) {
+            currX++;
+            waterReached.push(`${currX}x${waterY}`);
+          } else {
+            break;
+          }
+        }
+        if (!clayPositions.includes(`${currX}x${waterY + 1}`)) {
+          xInNextCheck.push(currX);
+          waterReached.push(`${currX}x${waterY + 1}`);
+        }
+      }
+    });
+    waterX = [...new Set(xInNextCheck)];
+    waterY++;
+  }
+
+  // Creating a visualisation
+  const cc = biggestX - smallestX;
+  const lights = Array(biggestY+1).fill('.').map(() => Array(biggestX - smallestX + 1).fill(''));
+  for (let i = 0; i < biggestY+1; i++) {
+    for (let j = 0; j < biggestX - smallestX+1; j++) {
+      lights[i][j] = '.';
+    }
+  }
+  waterReached.forEach(p => {
+    const d = p.split('x').map(Number);
+    lights[d[1]][d[0] - smallestX] = '|';
+  })
+  waterSettled.forEach(p => {
+    const d = p.split('x').map(Number);
+    lights[d[1]][d[0] - smallestX] = '~';
+  })
+  clayPositions.forEach(p => {
+    const d = p.split('x').map(Number);
+    lights[d[1]][d[0] - smallestX] = '#';
+  })
+
+  console.log(JSON.stringify(lights).replaceAll('"', '').replaceAll(',', ''));
+}
+
+// After getting a massive amount of wrong answers, I created a visualisation and realised
+// that there are so many edge cases, that it will take me less time to fix them manually than thinking how to do it in code xD
+// I've had enough of this task so here we are xD
+const day17_visualisation = fs.readFileSync('./2018/day17_visualisation.txt', 'utf-8');
+function countWaterSigns(visualisation) {
+  const waterAsText = visualisation.split('');
+  const watterReached = waterAsText.filter(x => x === '|').length;
+  const watterSettled = waterAsText.filter(x => x === '~').length;
+  // Part 1
+  console.log(watterReached + watterSettled);
+  // Part 2
+  console.log(watterSettled);
+}
+
+// Day 18
+const day18_area = fs.readFileSync('./2018/day18.txt', 'utf-8').split('\n').map(row => row.split(''));
+
+function simulateLumberCollection(area, steps) {
+  let currentArea = JSON.parse(JSON.stringify(area));
+  let tempArea = JSON.parse(JSON.stringify(area));
+
+  for (let step = 1; step <= Math.min(steps, 1000); step++) {
+    for (let i = 0; i < area.length; i++) {
+      for (let j = 0; j < area[0].length; j++) {
+        let trees = 0;
+        let lumberyards = 0;
+        if (currentArea[i-1] && currentArea[i-1][j-1] === '|') trees++;
+        if (currentArea[i-1] && currentArea[i-1][j] === '|') trees++;
+        if (currentArea[i-1] && currentArea[i-1][j+1] === '|') trees++;
+        if (currentArea[i][j-1] === '|') trees++;
+        if (currentArea[i][j+1] === '|') trees++;
+        if (currentArea[i+1] && currentArea[i+1][j-1] === '|') trees++;
+        if (currentArea[i+1] && currentArea[i+1][j] === '|') trees++;
+        if (currentArea[i+1] && currentArea[i+1][j+1] === '|') trees++;
+
+        if (currentArea[i-1] && currentArea[i-1][j-1] === '#') lumberyards++;
+        if (currentArea[i-1] && currentArea[i-1][j] === '#') lumberyards++;
+        if (currentArea[i-1] && currentArea[i-1][j+1] === '#') lumberyards++;
+        if (currentArea[i][j-1] === '#') lumberyards++;
+        if (currentArea[i][j+1] === '#') lumberyards++;
+        if (currentArea[i+1] && currentArea[i+1][j-1] === '#') lumberyards++;
+        if (currentArea[i+1] && currentArea[i+1][j] === '#') lumberyards++;
+        if (currentArea[i+1] && currentArea[i+1][j+1] === '#') lumberyards++;
+
+        if (currentArea[i][j] === '.') {
+          if (trees >= 3) tempArea[i][j] = '|';
+        }
+
+        if (currentArea[i][j] === '|') {
+          if (lumberyards >= 3) tempArea[i][j] = '#';
+        }
+
+        if (currentArea[i][j] === '#') {
+          if (trees >= 1 && lumberyards >= 1) {
+            tempArea[i][j] = '#'
+          } else {
+            tempArea[i][j] = '.'
+          }
+        }
+      }
+    }
+    currentArea = JSON.parse(JSON.stringify(tempArea));
+  }
+
+  // Very similar case to day 12
+  // After 1000 steps, there's already a pattern in quantity: lumberyards are not changing and trees follow this order:
+  const treesPattern = [3,2,2,2,0,-2,-1,-2,-3,-1,-2,-1,0,-1,-2,-2,-3,-3,-1,-1,1,1,3,2,3,2,3,1];
+
+  let allTrees = JSON.stringify(currentArea).split('').filter(x => x === '|').length;
+  const allLumberyards = JSON.stringify(currentArea).split('').filter(x => x === '#').length;
+
+  if (steps > 1000) {
+    // Full cycle in pattern gives 0 change in quantity, so we can ignore that and move to the remains
+    const remainingSteps = (steps - 1000) % treesPattern.length;
+    if (remainingSteps > 0) {
+      const sumOfRemaining = treesPattern.slice(0, remainingSteps).reduce((a,b) => a + b);
+      allTrees += sumOfRemaining;
+    }
+  }
+
+  console.log(allTrees * allLumberyards);
+}
+
+// Day 19
+const day19_instructions = fs.readFileSync('./2018/day19.txt', 'utf-8').split('\n');
+
+function runRegisterProgram(instructions) {
+  const NUMBER_REGEX = /[0-9]+/g;
+
+  let ip = instructions.shift();
+  ip = Number(ip.match(NUMBER_REGEX)[0]);
+  const pointerIndex = ip;
+  ip = 0;
+  const register = new RegisterProgram(null, [0, 0, 0, 0, 0, 0], null);
+
+  let output;
+  while (ip >= 0 && ip < instructions.length) {
+    const inst = instructions[ip].match(NUMBER_REGEX).map(Number);
+    inst.unshift(0);
+    const operation = instructions[ip].substring(0, 4);
+    register.setInstruction(inst);
+    output = register.runOpByName(operation);
+    register.setInput(output);
+    ip = register.updateInstructionPointer(pointerIndex);
+  }
+  console.log(output[0]);
+}
+
+/*
+Part 2 was tricky. It would work on the function above but it would take ages to complete.
+I had to reverse-engineer it and see what's going on inside.
+Turned out it required around 10551330^2 operations. I ran some loops, and found a solution which can be found in a function below
+*/
+
+function simulateRegisterWork() {
+  /*
+  let A = 0;
+  let B = 2;
+  let C = 0;
+  const BIG = 10551330;
+  let F = 1;
+
+  while (F <= BIG) {
+    C = B * F;
+    if (C === BIG) {
+      A += F;
+    }
+    B++;
+    if (B > BIG) {
+      F++;
+      if (F <= BIG) {
+        B = 1;
+      }
+    }
+  }
+  */
+
+  // Above is explanation about what's going on inside register.
+  // It's still taking too long, so below is simpler solution that will give the same result.
+  // It's easy to find out that the register is summing up all divisors of BIG number. So here it is:
+
+  const BIG = 10551330;
+  let A = 0;
+  for (let i = 1; i <= BIG; i++) {
+    if (BIG % i === 0) {
+      A += i;
+    }
+  }
+  console.log(A);
+}
+
 
 
 
@@ -1182,3 +1799,22 @@ function findOptimalAtkPower(battlefield) {
 // simulateBattle(day15_battlefield);
 // console.log('Day 15, part 2 (this will take a bigger while):');
 // findOptimalAtkPower(day15_battlefield);
+
+// console.log('Day 16, part 1:');
+// checkSamples(day16_samples);
+// console.log('Day 16, part 2:');
+// workoutRegistersAndExecuteProgram(day16_samples, day16_opcodes);
+
+// This function only counts signs in a prepared visualisation. Read more above in day 17
+// console.log('Day 17, part 1 & 2:')
+// countWaterSigns(day17_visualisation);
+
+// console.log('Day 18, part 1:');
+// simulateLumberCollection(day18_area, 10);
+// console.log('Day 18, part 2:');
+// simulateLumberCollection(day18_area, 1000000000);
+
+// console.log('Day 19, part 1 (this will take a while):');
+// runRegisterProgram(day19_instructions);
+// console.log('Day 19, part 2:');
+// simulateRegisterWork();

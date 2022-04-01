@@ -624,7 +624,236 @@ function findReindeerOnLead(reindeers, time) {
 }
 
 //Day 15
+const day15_ingredients = fs.readFileSync('./2015/day15.txt', 'utf-8').split('\n');
 
+function calcRecipeScore(values, spoons) {
+  const scores = values[0].map(() => 0);
+  for (let i = 0; i < values[0].length; i++) {
+    for (let j = 0; j < values.length; j++) {
+      scores[i] += spoons[j] * values[j][i]
+    }
+  }
+  const finalScore = scores.reduce((a,b) => a * b);
+  return finalScore > 0 ? finalScore : 0;
+}
+
+function createRecipe(ingredients) {
+  const NUMBER_REGEX = /-?[0-9]+/g;
+  const values = ingredients.map(i => i.match(NUMBER_REGEX).map(Number).slice(0,4));
+  const spoons = values.map(() => 1);
+  let availableSpoons = 100 - values.length;
+
+  while (availableSpoons > 0) {
+    let possibleScores = [];
+    for (let i = 0; i < values.length; i++) {
+      possibleScores.push(calcRecipeScore(values, spoons.map((s, id) => i === id ? s + 1 : s)));
+    }
+    const bestAt = possibleScores.indexOf(Math.max(...possibleScores));
+    spoons[bestAt]++;
+    availableSpoons--;
+  }
+
+  console.log(calcRecipeScore(values, spoons));
+}
+
+function createRecipeWith500Calories(ingredients) {
+  const NUMBER_REGEX = /-?[0-9]+/g;
+  const values = ingredients.map(i => i.match(NUMBER_REGEX).map(Number).slice(0,4));
+  const calories = ingredients.map(i => i.match(NUMBER_REGEX).map(Number).pop());
+  const possibleSpoons = [];
+
+  // Don't really like it (similar like on day 9) but it's the only thing that came to my mind
+  for (a = 1; a <= 100; a++) {
+    for (b = 1; b <= 100 - a; b++) {
+      for (c = 1; c <= 100 - a - b; c++) {
+        for (d = 1; d <= 100 - a - b - c; d++) {
+          if (a + b + c + d === 100) {
+            if (calories[0] * a + calories[1] * b + calories[2] * c + calories[3] * d === 500) {
+              possibleSpoons.push([a, b, c, d]);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  let highestScore = 0;
+  possibleSpoons.forEach(spoons => {
+    const score = calcRecipeScore(values, spoons);
+    if (score > highestScore) highestScore = score;
+  })
+  console.log(highestScore)
+}
+
+//Day 16
+const day16_aunts = fs.readFileSync('./2015/day16.txt', 'utf-8').split('\n');
+const targetAunt = {
+  children: 3,
+  cats: 7,
+  samoyeds: 2,
+  pomeranians: 3,
+  akitas: 0,
+  vizslas: 0,
+  goldfish: 5,
+  trees: 3,
+  cars: 2,
+  perfumes: 1
+}
+
+function findAunt(aunts) {
+  let foundAunt;
+  aunts.forEach((aunt, id) => {
+    let allGood = true;
+    Object.entries(targetAunt).forEach(([property, amount]) => {
+      if (aunt.includes(property)) {
+        if (Number(aunt[aunt.indexOf(property) + property.length + 2]) !== amount) {
+          allGood = false;
+        }
+      }
+    })
+    if (allGood === true) {
+      foundAunt = id + 1;
+    }
+  })
+
+  console.log(foundAunt);
+}
+
+function findAunt2(aunts) {
+  let foundAunt;
+  aunts.forEach((aunt, id) => {
+    let allGood = true;
+    Object.entries(targetAunt).forEach(([property, amount]) => {
+      if (aunt.includes(property)) {
+        const propAmount = Number(aunt[aunt.indexOf(property) + property.length + 2]);
+        if (property === 'cats' || property === 'trees') {
+          if (propAmount <= amount) allGood = false;
+        }
+        else if (property === 'pomeranians' || property === 'goldfish') {
+          if (propAmount >= amount) allGood = false;
+        }
+        else if (propAmount !== amount) {
+          allGood = false
+        }
+      }
+    })
+    if (allGood === true) {
+      foundAunt = id + 1;
+    }
+  })
+
+  console.log(foundAunt);
+}
+
+//Day 17
+const day17_containers = fs.readFileSync('./2015/day17.txt', 'utf-8').split('\n').map(Number);
+
+function findCombinations(containers, target) {
+  const check = [0];
+  combinations = [];
+
+  while (check[0] <= containers.length - 1) {
+    let sum = 0;
+    for (let i = 0; i < check.length; i++) {
+      sum += containers[check[i]];
+    }
+    if (sum < target) {
+      if (check[check.length - 1] < containers.length - 1) {
+        check.push(check[check.length - 1] + 1);
+      } else {
+        check.pop();
+        check[check.length - 1]++;
+      }
+    }
+    else {
+      if (sum === target) combinations.push([...check.map(c => containers[c])]);
+      if (check[check.length - 1] < containers.length - 1) {
+        check[check.length - 1]++;
+      } else {
+        check.pop();
+        check[check.length - 1]++;
+      }
+    }
+  }
+
+  //Part 1
+  console.log(combinations.length);
+
+  //Part 2
+  const usedContainers = combinations.map(c => c.length);
+  const minUsed = Math.min(...usedContainers);
+  console.log(usedContainers.filter(num => num === minUsed).length);
+}
+
+//Day 18
+const day18_lights = fs.readFileSync('./2015/day18.txt', 'utf-8').split('\n').map(row => row.split(''));
+
+function playLightAnimation(lights, stuckCorners = false) {
+  if (stuckCorners) {
+    lights[0][0] = '#';
+    lights[0][99] = '#';
+    lights[99][0] = '#';
+    lights[99][99] = '#';
+  }
+  let currentSetting = JSON.parse(JSON.stringify(lights));
+  let tempSetting = JSON.parse(JSON.stringify(lights));
+
+  for (let step = 1; step <= 100; step++) {
+    for (let i = 0; i < lights.length; i++) {
+      for (let j = 0; j < lights[0].length; j++) {
+        let neighboursOn = 0;
+        if (currentSetting[i-1] && currentSetting[i-1][j-1] === '#') neighboursOn++;
+        if (currentSetting[i-1] && currentSetting[i-1][j] === '#') neighboursOn++;
+        if (currentSetting[i-1] && currentSetting[i-1][j+1] === '#') neighboursOn++;
+        if (currentSetting[i][j-1] === '#') neighboursOn++;
+        if (currentSetting[i][j+1] === '#') neighboursOn++;
+        if (currentSetting[i+1] && currentSetting[i+1][j-1] === '#') neighboursOn++;
+        if (currentSetting[i+1] && currentSetting[i+1][j] === '#') neighboursOn++;
+        if (currentSetting[i+1] && currentSetting[i+1][j+1] === '#') neighboursOn++;
+
+        if (currentSetting[i][j] === '#') {
+          neighboursOn === 2 || neighboursOn === 3 ? tempSetting[i][j] = '#' : tempSetting[i][j] = '.';
+        }
+
+        if (currentSetting[i][j] === '.') {
+          neighboursOn === 3 ? tempSetting[i][j] = '#' : tempSetting[i][j] = '.';
+        }
+      }
+    }
+    if (stuckCorners) {
+      tempSetting[0][0] = '#';
+      tempSetting[0][99] = '#';
+      tempSetting[99][0] = '#';
+      tempSetting[99][99] = '#';
+    }
+    currentSetting = JSON.parse(JSON.stringify(tempSetting));
+  }
+  console.log(JSON.stringify(currentSetting).split('').filter(x => x === '#').length);
+}
+
+//Day 19
+const [day19_replacements, day19_medicine] = fs.readFileSync('./2015/day19.txt', 'utf-8').split('\n\n');
+
+function findDistinctMolecules(replacements, medicine) {
+  const reps = replacements.split('\n').map(row => row.match(/[A-Za-z]+/g))
+  const molecules = [];
+
+  reps.forEach(([from, to]) => {
+    let startAt = 0;
+    while (medicine.indexOf(from, startAt) !== -1) {
+      const toReplace = medicine.indexOf(from, startAt);
+      const molecule = medicine.split('');
+      molecule.splice(toReplace, from.length, to);
+      molecules.push(molecule.join(''));
+      startAt = toReplace + 1;
+    }
+  });
+
+  console.log(new Set(molecules).size)
+}
+
+//Part 2
+// ?????
 
 
 
@@ -693,3 +922,24 @@ function findReindeerOnLead(reindeers, time) {
 // findFastestReindeer(day14_reindeers, 2503);
 // console.log('Day 14, part 2:')
 // findReindeerOnLead(day14_reindeers, 2503)
+
+// console.log('Day 15, part 1:');
+// createRecipe(day15_ingredients);
+// console.log('Day 15, part 2:');
+// createRecipeWith500Calories(day15_ingredients);
+
+// console.log('Day 16, part 1:');
+// findAunt(day16_aunts);
+// console.log('Day 16, part 2:');
+// findAunt2(day16_aunts);
+
+// console.log('Day 17, part 1 & 2:');
+// findCombinations(day17_containers, 150);
+
+// console.log('Day 18, part 1:');
+// playLightAnimation(day18_lights);
+// console.log('Day 18, part 2:');
+// playLightAnimation(day18_lights, true);
+
+// console.log('Day 19, part 1:');
+// findDistinctMolecules(day19_replacements, day19_medicine);

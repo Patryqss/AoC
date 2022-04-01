@@ -648,8 +648,8 @@ function compareGenerators(start_values) {
 function findMultiplication(start, by, multiply) {
   let curr;
   for (let i = 0; curr % by !== 0; i++) {
-  if (i === 0) curr = start;
-  curr = (curr * multiply) % 2147483647
+    if (i === 0) curr = start;
+    curr = (curr * multiply) % 2147483647
   }
   return curr
 }
@@ -942,9 +942,60 @@ function simulateRoutingPath(diagram) {
   console.log(steps);
 }
 
+//Day 20
+const day20_particles = fs.readFileSync('./2017/day20.txt', 'utf-8').split('\n');
 
+function moveParticles(particles, collide = false) {
+  const NUMBER_REGEX = /-?[0-9]+/g;
+  let particlesData = particles.map(particle => {
+    const values = particle.split(', ');
+    const p = values[0].match(NUMBER_REGEX).map(Number);
+    const v = values[1].match(NUMBER_REGEX).map(Number);
+    const a = values[2].match(NUMBER_REGEX).map(Number);
+    return {
+      position: p,
+      velocity: v,
+      acceleration: a
+    }
+  });
 
+  for (let i = 0; i < 1000; i++) {
+    const positions = [];
+    const repeats = [];
+    particlesData.forEach(particle => {
+      particle.velocity[0] += particle.acceleration[0];
+      particle.velocity[1] += particle.acceleration[1];
+      particle.velocity[2] += particle.acceleration[2];
+      particle.position[0] += particle.velocity[0];
+      particle.position[1] += particle.velocity[1];
+      particle.position[2] += particle.velocity[2];
+      if (collide) {
+        const position = particle.position.join('x');
+        if (positions.includes(position) && !repeats.includes(position)) {
+          repeats.push(position);
+        }
+        positions.push(position);
+      }
+    });
+    if (collide) {
+      repeats.forEach(r => {
+        particlesData = particlesData.filter(p => p.position.join('x') !== r)
+      });
+    }
+  }
 
+  if (!collide) {
+    const distances = [];
+    particlesData.forEach(particle => {
+      distances.push(Math.abs(particle.position[0]) + Math.abs(particle.position[1]) + Math.abs(particle.position[2]));
+    });
+    console.log(distances.indexOf(Math.min(...distances)));
+  } else {
+    console.log(particlesData.length);
+  }
+}
+
+//Day 21
 
 
 
@@ -1037,3 +1088,8 @@ function simulateRoutingPath(diagram) {
 
 // console.log('Day 19, part 1 & 2:');
 // simulateRoutingPath(day19_diagram);
+
+// console.log('Day 20, part 1:');
+// moveParticles(day20_particles);
+// console.log('Day 20, part 2:');
+// moveParticles(day20_particles, true);

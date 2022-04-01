@@ -657,8 +657,451 @@ function findMassiveFlash(data) {
 }
 
 //Day 12
-const day12_caves = fs.readFileSync('./2021/day12.txt', 'utf-8').split('\n');
+const day12_caves = fs.readFileSync('./2021/day12.txt', 'utf-8').split('\n').map(route => route.split('-'));
 
+function prepareGraph(caves) {
+  const cavesNames = [];
+  caves.forEach(c => {
+    if (!cavesNames.includes(c[0])) cavesNames.push(c[0])
+    if (!cavesNames.includes(c[1])) cavesNames.push(c[1])
+  });
+  const graph = new Map();
+  cavesNames.forEach(c => graph.set(c, []));
+  caves.forEach(([from, to]) => {
+    if (to !== 'start' && from !== 'end') {
+      graph.get(from).push(to);
+    }
+    if (to !== 'end' && from !== 'start') {
+      graph.get(to).push(from);
+    }
+  });
+
+  return graph;
+}
+
+function isUpper(word) {
+  return word === word.toUpperCase()
+}
+
+function findPathsThroughCaves(cavesConnections) {
+  const routes = prepareGraph(cavesConnections);
+  let paths = [];
+
+  const dfs = (start, visited = []) => {
+    visited.push(start);
+    const destinations = routes.get(start);
+
+    destinations.forEach(destination => {
+      if (destination === 'end') {
+        paths.push(Array(...visited, 'end').join(','));
+        return;
+      }
+      if (!visited.includes(destination) || isUpper(destination)) {
+        dfs(destination, [...visited]);
+      }
+    });
+  }
+  dfs('start');
+
+  console.log(paths.length);
+}
+
+function findPathsThroughCavesWithDoubleVisit(cavesConnections) {
+  const routes = prepareGraph(cavesConnections);
+  let paths = [];
+
+  const dfs = (start, visited = [], doubled = '') => {
+    visited.push(start);
+    const destinations = routes.get(start);
+
+    destinations.forEach(destination => {
+      if (destination === 'end') {
+        paths.push(Array(...visited, 'end').join(','));
+        return;
+      }
+      if (!visited.includes(destination) || isUpper(destination)) {
+        dfs(destination, [...visited], doubled);
+      } else if (!isUpper(destination) && !doubled) {
+        dfs(destination, [...visited], destination);
+      }
+    });
+  }
+  dfs('start');
+
+  console.log(paths.length);
+}
+
+//Day 13
+const [day13_dots, day13_folds] = fs.readFileSync('./2021/day13.txt', 'utf-8').split('\n\n').map(data => data.split('\n'));
+
+function foldPaper(dotsCoords, folds) {
+  const NUMBERS_REGEX = /[0-9]+/g;
+  const dots = dotsCoords.map(d => d.split(',').map(Number));
+  const xSize = Math.max(...dots.map(d => d[0])) + 1;
+  let ySize = Math.max(...dots.map(d => d[1])) + 1;
+  if (ySize % 2 === 0) ySize++;
+
+  const paper = Array(ySize).fill('.').map(() => Array(xSize).fill('.'));
+  dots.forEach(dot => {
+    paper[dot[1]][dot[0]] = '█'
+  })
+
+  folds.forEach((fold, id) => {
+    const coord = Number(fold.match(NUMBERS_REGEX)[0]);
+    if (fold.includes('y')) {
+      for (let i = 0; i < coord; i++) {
+        for (let j = 0; j < paper[0].length; j++) {
+          let toWrite = paper[i][j];
+          if (paper[paper.length - 1 - i][j] === '█') toWrite = '█'
+          paper[i][j] = toWrite;
+        }
+      }
+      paper.splice(coord);
+    } else {
+      for (let i = 0; i < paper.length; i++) {
+        for (let j = 0; j < coord; j++) {
+          let toWrite = paper[i][j];
+          if (paper[i][paper[i].length - 1 - j] === '█') toWrite = '█'
+          paper[i][j] = toWrite;
+        }
+        paper[i].splice(coord);
+      }
+    }
+    //Part 1
+    if (id === 0) console.log('Part 1: ' + JSON.stringify(paper).split('').filter(x => x === '█').length);
+  });
+
+  //Part 2
+  console.log('Part 2: Adjust the size of your console to see the answer');
+  console.log(JSON.stringify(paper))
+}
+
+//Day 14
+const [day14_template, day14_rules] = fs.readFileSync('./2021/day14.txt', 'utf-8').split('\n\n');
+
+function growPolymer(template, rules, steps) {
+  const combinations = {};
+  let currentTemplate = {};
+  let newTemplates = {};
+  const letters = {};
+  rules.split('\n').forEach(r => {
+    r = r.split(' -> ');
+    combinations[r[0]] = r[1];
+  });
+  for (let i = 0; i < template.length - 1; i ++) {
+    currentTemplate[template[i] + template[i+1]] = 1;
+  }
+  for (let i = 0; i < template.length; i++) {
+    letters[template[i]] = letters[template[i]] ? letters[template[i]] + 1 : 1;
+  }
+
+  for (let i = 1; i <= steps; i++) {
+    for (combination in currentTemplate) {
+      const newLetter = combinations[combination];
+      const count = currentTemplate[combination];
+      letters[newLetter] = letters[newLetter] ? letters[newLetter] + count : count;
+
+      newTemplates[combination[0] + newLetter] = newTemplates[combination[0] + newLetter] ?
+        newTemplates[combination[0] + newLetter] + count :
+        count;
+
+      newTemplates[newLetter + combination[1]] = newTemplates[newLetter + combination[1]] ?
+      newTemplates[newLetter + combination[1]] + count :
+      count;
+    }
+    currentTemplate = {...newTemplates};
+    newTemplates = {};
+  }
+
+  console.log(Math.max(...Object.values(letters)) - Math.min(...Object.values(letters)))
+}
+
+//Day 15
+const day15_cave = fs.readFileSync('./2021/day15.txt', 'utf-8').split('\n').map(row => row.split('').map(Number));
+const Graph = require('node-dijkstra');
+
+function findSafestRoute(cave) {
+  const route = new Graph();
+  for (let y = 0; y < cave.length; y++) {
+    for (let x = 0; x < cave[0].length; x++) {
+      const from = `${x},${y}`;
+      const to = new Map();
+      if (cave[y-1]) to.set(`${x},${y-1}`, cave[y-1][x]);
+      if (cave[x-1]) to.set(`${x-1},${y}`, cave[y][x-1]);
+      if (cave[x+1]) to.set(`${x+1},${y}`, cave[y][x+1]);
+      if (cave[y+1]) to.set(`${x},${y+1}`, cave[y+1][x]);
+
+      route.addNode(from, to);
+    }
+  }
+  console.log(route.path("0,0", `${cave[0].length - 1},${cave.length - 1}`, { cost: true }).cost)
+}
+
+function findSafestRouteOnBigCave(smallCave) {
+  const bigCave = JSON.parse(JSON.stringify(smallCave));
+  //Expand cave on right
+  for (let i = 1; i <= 4; i++) {
+    for (let y = 0; y < smallCave.length; y++) {
+      for (let x = 0; x < smallCave[0].length; x++) {
+        let toAdd = smallCave[y][x] + i;
+        if (toAdd > 9) toAdd -= 9;
+        bigCave[y].push(toAdd);
+      }
+    }
+  }
+
+  const bigCaveSingleTileRow = JSON.parse(JSON.stringify(bigCave));
+  //Expand cave on bottom
+  for (let i = 1; i <= 4; i++) {
+    for (let y = 0; y < bigCaveSingleTileRow.length; y++) {
+      bigCave.push(bigCaveSingleTileRow[y].map(x => {
+        let toAdd = x + i;
+        if (toAdd > 9) toAdd -= 9;
+        return toAdd;
+      }))
+    }
+  }
+  findSafestRoute(bigCave);
+}
+
+//Day 16
+const day16_transmission = fs.readFileSync('./2021/day16.txt', 'utf-8');
+
+function binaryToDec(binary) {
+  return parseInt(binary.toString(), 2);
+}
+
+function hexToBinary(hex) {
+  //parseInt truncates big numbers so I had to write my own function;
+  const dict = {
+    "0": "0000",
+    "1": "0001",
+    "2": "0010",
+    "3": "0011",
+    "4": "0100",
+    "5": "0101",
+    "6": "0110",
+    "7": "0111",
+    "8": "1000",
+    "9": "1001",
+    "A": "1010",
+    "B": "1011",
+    "C": "1100",
+    "D": "1101",
+    "E": "1110",
+    "F": "1111"
+  }
+  let binary = '';
+  hex.split('').forEach(x => {
+    binary += dict[x];
+  })
+  return binary;
+}
+
+function decodeLiteralValue(packet) {
+  let bits = packet;
+  let decodedValue = '';
+  let usedBits = 0;
+  let lastGroup = false;
+  while (!lastGroup) {
+    decodedValue += bits.slice(1,5);
+    usedBits += 5;
+    if (bits[0] === '0') lastGroup = true;
+    bits = bits.slice(5);
+  }
+  if (bits.split('').every(n => n === '0')) {
+    usedBits += bits.length;
+    bits = '';
+  }
+  decodedValue = binaryToDec(decodedValue);
+  return { usedBits, remainingTransmission: bits, decodedValue };
+}
+
+function decodeOperatorPacket(packet, packetTypeID) {
+  let bits = packet.slice(1);
+  let usedBits = 1;
+  const versions = [];
+  const values = [];
+  const lengthType = packet[0];
+  if (lengthType === '0') {
+    let lengthOfBits = binaryToDec(bits.slice(0, 15));
+    bits = bits.slice(15);
+    usedBits += 15;
+
+    while (lengthOfBits > 0) {
+      versions.push(binaryToDec(bits.slice(0,3)));
+      bits = bits.slice(3);
+      usedBits += 3;
+      const typeID = binaryToDec(bits.slice(0,3));
+      if (typeID === 4) {
+        const data = decodeLiteralValue(bits.slice(3));
+        usedBits += 3;
+        bits = data.remainingTransmission;
+        lengthOfBits -= 6;
+        lengthOfBits -= data.usedBits;
+        usedBits += data.usedBits;
+        values.push(data.decodedValue);
+      } else {
+        const data = decodeOperatorPacket(bits.slice(3), typeID);
+        usedBits += 3;
+        bits = data.remainingTransmission;
+        lengthOfBits -= 6;
+        lengthOfBits -= data.usedBits;
+        usedBits += data.usedBits;
+        versions.push(...data.versions)
+        values.push(data.decodedValue);
+      }
+    }
+
+  } else {
+    let totalSubPackets = binaryToDec(bits.slice(0,11));
+    bits = bits.slice(11);
+    usedBits += 11;
+
+    while (totalSubPackets > 0) {
+      versions.push(binaryToDec(bits.slice(0,3)));
+      bits = bits.slice(3);
+      usedBits += 3;
+      const typeID = binaryToDec(bits.slice(0,3));
+      if (typeID === 4) {
+        const data = decodeLiteralValue(bits.slice(3));
+        usedBits += 3;
+        bits = data.remainingTransmission;
+        usedBits += data.usedBits;
+        totalSubPackets--;
+        values.push(data.decodedValue);
+      } else {
+        const data = decodeOperatorPacket(bits.slice(3), typeID);
+        usedBits += 3;
+        bits = data.remainingTransmission;
+        usedBits += data.usedBits;
+        versions.push(...data.versions)
+        totalSubPackets--;
+        values.push(data.decodedValue);
+      }
+    }
+  }
+
+  if (bits.split('').every(n => n === '0')) {
+    usedBits += bits.length;
+    bits = '';
+  }
+  let finalValue;
+  switch(packetTypeID) {
+    case 0:
+      finalValue = values.reduce((a,b) => a + b);
+      break;
+    case 1:
+      finalValue = values.reduce((a,b) => a * b);
+      break;
+    case 2:
+      finalValue = Math.min(...values);
+      break;
+    case 3:
+      finalValue = Math.max(...values);
+      break;
+    case 5:
+      finalValue = values[0] > values[1] ? 1 : 0;
+      break;
+    case 6:
+      finalValue = values[0] < values[1] ? 1 : 0;
+      break;
+    case 7:
+      finalValue = values[0] === values[1] ? 1 : 0;
+      break;
+    default: break;
+  }
+
+  return { usedBits, remainingTransmission: bits, versions, decodedValue: finalValue };
+}
+
+function decodeTransmission(transmission) {
+  let binaryTransmission = hexToBinary(transmission);
+  const versions = [];
+  let decodedValue;
+  while (binaryTransmission.length > 0) {
+    versions.push(binaryToDec(binaryTransmission.slice(0,3)));
+    binaryTransmission = binaryTransmission.slice(3);
+    const typeID = binaryToDec(binaryTransmission.slice(0,3));
+    if (typeID === 4) {
+      const data = decodeLiteralValue(binaryTransmission.slice(3));
+      binaryTransmission = data.remainingTransmission;
+    } else {
+      const data = decodeOperatorPacket(binaryTransmission.slice(3), typeID);
+      binaryTransmission = data.remainingTransmission;
+      versions.push(...data.versions);
+      decodedValue = data.decodedValue;
+    }
+  }
+  console.log(versions.reduce((a,b) => a + b));
+  console.log(decodedValue);
+}
+
+//Day 17
+const day17_target = fs.readFileSync('./2021/day17.txt', 'utf-8');
+
+function fireProbe(target) {
+  const NUMBER_REGEX = /-?[0-9]+/g;
+  const area = target.match(NUMBER_REGEX).map(Number);
+  let biggestHeight = 0;
+  let matchingFires = 0;
+  const matchingXs = [];
+  for (let x = 5; x <= area[1]; x++) {
+    let sum = x;
+    let tempX = x;
+    while (sum < area[0] && tempX > 0) {
+      tempX--;
+      sum += tempX;
+    }
+    if (sum >= area[0] && sum <= area[1]) matchingXs.push(x);
+  }
+
+  let fireDirection = [matchingXs[0], area[2]];
+  while (fireDirection[0] <= matchingXs[matchingXs.length - 1]) {
+    let overshooted = false;
+    while (!overshooted) {
+      let thisFire = [...fireDirection];
+      let probeCoords = [0, 0];
+      let probeMaxY = 0;
+      while (probeCoords[1] > area[3]) {
+        probeCoords[0] += thisFire[0];
+        probeCoords[1] += thisFire[1];
+        if (thisFire[0] > 0) thisFire[0]--;
+        thisFire[1]--;
+        if (probeMaxY < probeCoords[1]) probeMaxY = probeCoords[1];
+      }
+
+      //edge case, probe fit on Y, but didn't make it to X, but still can, after additional steps
+      while(probeCoords[1] + thisFire[1] >= area[2] && probeCoords[0] < area[0]) {
+        probeCoords[0] += thisFire[0];
+        probeCoords[1] += thisFire[1];
+        if (thisFire[0] > 0) thisFire[0]--;
+        thisFire[1]--;
+      }
+
+      if (probeCoords[0] < area[0]) {
+        fireDirection[1]++;
+      } else if (probeCoords[0] >= area[0] && probeCoords[0] <= area[1]) {
+        if (probeCoords[1] >= area[2]) {
+          matchingFires++;
+          if (biggestHeight < probeMaxY) biggestHeight = probeMaxY;
+        } else {
+          const overshoot = probeCoords[1] - area[2];
+          if (overshoot < area[2]) overshooted = true;
+        }
+        fireDirection[1]++;
+      } else {
+        overshooted = true;
+      }
+    }
+    fireDirection[0]++;
+    fireDirection[1] = area[2];
+  }
+  console.log(biggestHeight);
+  console.log(matchingFires);
+}
+
+//day 18
 
 
 
@@ -719,3 +1162,27 @@ const day12_caves = fs.readFileSync('./2021/day12.txt', 'utf-8').split('\n');
 // countFlashes(day11_octopuses);
 // console.log('Day 11, part 2:');
 // findMassiveFlash(day11_octopuses_p2);
+
+// console.log('Day 12, part 1:');
+// findPathsThroughCaves(day12_caves);
+// console.log('Day 12, part 2:');
+// findPathsThroughCavesWithDoubleVisit(day12_caves);
+
+// console.log('Day 13:');
+// foldPaper(day13_dots, day13_folds);
+
+// console.log('Day 14, part 1:');
+// growPolymer(day14_template, day14_rules, 10);
+// console.log('Day 14, part 2:');
+// growPolymer(day14_template, day14_rules, 40);
+
+// console.log('Day 15, part 1:');
+// findSafestRoute(day15_cave);
+// console.log('Day 15, part 2:');
+// findSafestRouteOnBigCave(day15_cave);
+
+// console.log('Day 16, part 1 & 2:');
+// decodeTransmission(day16_transmission);
+
+// console.log('Day 17, part 1 & 2:');
+// fireProbe(day17_target);
