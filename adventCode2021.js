@@ -1102,6 +1102,119 @@ function fireProbe(target) {
 }
 
 //day 18
+const day18_snail_numbers = fs.readFileSync('./2021/day18.txt', 'utf-8').split('\n');
+const NUMS_REGEX = /[0-9]+/g;
+
+String.prototype.replaceAt = function(index, replacement, toReplace = replacement.length) {
+  return this.substring(0, index) + replacement + this.substring(index + toReplace);
+}
+
+function toExplode(num) {
+  let depth = 0;
+  let explodingIndex = null
+  for (let i = 0; i < num.length; i++) {
+    if (num[i] === '[') depth++;
+    if (num[i] === ']') depth--;
+    if (depth === 5) {
+      explodingIndex = i
+      break;
+    }
+  }
+  return explodingIndex;
+}
+
+function toSplit(num) {
+  const nums = num.match(NUMS_REGEX).map(Number);
+  return nums.find(n => n >= 10);
+}
+
+function addSnailNumbers(nums) {
+  let currentResult = nums[0];
+  const remainingNumbers = nums.slice(1);
+
+  while (remainingNumbers.length > 0) {
+    currentResult = `[${currentResult},${remainingNumbers.splice(0, 1)}]`;
+    let canBeReduced = true;
+
+    while(canBeReduced) {
+      let explodingPairId = toExplode(currentResult)
+      const splitNum = toSplit(currentResult)
+
+      if (explodingPairId) {
+        const [toExplode1, toExplode2] = currentResult.slice(explodingPairId).match(NUMS_REGEX).map(Number).slice(0,2);
+        let pairLength = 5;
+        if (toExplode1 > 9) pairLength++;
+        if (toExplode2 > 9) pairLength++;
+
+        let leftToAdd = currentResult.slice(0, explodingPairId).match(NUMS_REGEX)
+        if (leftToAdd) {
+          leftToAdd = Number(leftToAdd[leftToAdd.length - 1]);
+          const indexToReplace = currentResult.slice(0, explodingPairId).lastIndexOf(leftToAdd);
+          const toReplace = leftToAdd > 9 ? 2 : 1;
+          currentResult = currentResult.replaceAt(indexToReplace, leftToAdd + toExplode1, toReplace);
+          explodingPairId += (leftToAdd + toExplode1).toString().length - toReplace;
+        }
+
+        let rightToAdd = currentResult.slice(explodingPairId + pairLength).match(NUMS_REGEX);
+        if (rightToAdd) {
+          rightToAdd = Number(rightToAdd[0]);
+          const indexToReplace = currentResult.slice(explodingPairId + pairLength).indexOf(rightToAdd) + explodingPairId + pairLength;
+          const toReplace = rightToAdd > 9 ? 2 : 1;
+          currentResult = currentResult.replaceAt(indexToReplace, rightToAdd + toExplode2, toReplace);
+        }
+
+        currentResult = currentResult.replaceAt(explodingPairId, 0, pairLength);
+      } else if (splitNum) {
+        const afterSplit = `[${Math.floor(splitNum / 2)},${Math.ceil(splitNum / 2)}]`;
+        currentResult = currentResult.replaceAt(currentResult.indexOf(splitNum), afterSplit, 2);
+      } else {
+        canBeReduced = false;
+      }
+    }
+  }
+
+  return currentResult;
+}
+
+function findMagnitudeOfSnailNumbers(numbers, toConsole = true) {
+  let magnitude = addSnailNumbers(numbers);
+
+  while (!Number(magnitude)) {
+    const nums = magnitude.match(NUMS_REGEX);
+    let pairToReduce, num1, num2
+    for (let i = 0; i < nums.length - 1; i++) {
+      pairToReduce = `[${nums[i]},${nums[i+1]}]`;
+      if (magnitude.indexOf(pairToReduce) !== -1) {
+        num1 = Number(nums[i]);
+        num2 = Number(nums[i+1]);
+        break;
+      }
+    }
+    const reducedValue = 3 * num1 + 2 * num2;
+    magnitude = magnitude.replace(pairToReduce, reducedValue);
+  }
+
+  if (toConsole) {
+    console.log(magnitude);
+  } else {
+    return Number(magnitude);
+  }
+}
+
+function findBiggestMagnitudeOfTwoSnailNumbers(numbers) {
+  let biggestMagnitude = 0;
+  while(numbers.length > 1) {
+    for (let i = 1; i < numbers.length; i++) {
+      const magXY = findMagnitudeOfSnailNumbers([numbers[0], numbers[i]], false);
+      const magYX = findMagnitudeOfSnailNumbers([numbers[i], numbers[0]], false);
+      biggestMagnitude = Math.max(biggestMagnitude, magXY, magYX);
+    }
+    numbers.splice(0,1);
+  }
+  console.log(biggestMagnitude);
+}
+
+// Day 19
 
 
 
@@ -1186,3 +1299,8 @@ function fireProbe(target) {
 
 // console.log('Day 17, part 1 & 2:');
 // fireProbe(day17_target);
+
+// console.log('Day 18, part 1:');
+// findMagnitudeOfSnailNumbers(day18_snail_numbers);
+// console.log('Day 18, part 2:');
+// findBiggestMagnitudeOfTwoSnailNumbers(day18_snail_numbers);

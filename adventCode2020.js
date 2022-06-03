@@ -1071,6 +1071,131 @@ function evaluateAdvancedExpressions(expressions) {
 }
 
 //Day 19
+let [day19_rules, day19_messages] = fs.readFileSync('./2020/day19.txt', 'utf-8').split('\n\n');
+day19_rules = day19_rules.split('\n');
+day19_messages = day19_messages.split('\n');
+
+function decodeRules(rules, toDecode) {
+  const NUMS_REGEX = /[0-9]+/g;
+  const allRules = {}
+  rules.forEach(r => {
+    const ruleID = r.match(NUMS_REGEX)[0];
+    const rule = r.substring(r.indexOf(':') + 2);
+    allRules[ruleID] = rule.replaceAll('"', '').split(' | ');
+  })
+
+  let knownRules = [];
+
+  assignKnownRules = () => {
+    Object.entries(allRules).forEach(([id, r]) => {
+      if (r.every(part => {
+        const partNums = part.match(NUMS_REGEX)
+        return !partNums
+      })) {
+        knownRules.push(id.toString());
+      }
+    })
+  }
+  assignKnownRules();
+
+  while (toDecode.every(rule => !knownRules.includes(rule))) {
+    Object.values(allRules).forEach((r, id) => {
+      if (knownRules.includes(id.toString())) return;
+
+      r.forEach((part, partId) => {
+        if (!part.match(NUMS_REGEX)) return;
+
+        let matchingRule;
+        consistingRules = part.split(' ');
+        consistingRules.forEach(cr => {
+          if (knownRules.includes(cr)) matchingRule = cr;
+        })
+        if (!matchingRule) return;
+
+        const toReplace = allRules[matchingRule];
+        const updatedRule = toReplace.map(replaceRule => {
+          // Replace only the first occurance of the rule to always get all possible combinations
+          const temp = consistingRules.map((cr, crId) => cr === matchingRule && consistingRules.indexOf(matchingRule) === crId ? replaceRule : cr);
+          return temp.join(' ');
+        });
+
+        r.splice(partId, 1, ...updatedRule);
+      })
+    });
+
+    knownRules = [];
+    assignKnownRules();
+  }
+
+  return allRules;
+}
+
+function countValidMessages(rules, messages) {
+  const allRules = decodeRules(rules, ['0']);
+
+  const rule0 = allRules['0'].map(rule => rule.replaceAll(' ', ''));
+  let matchingMessages = 0;
+  messages.forEach(m => {
+    if (rule0.includes(m)) matchingMessages++;
+  })
+  console.log(matchingMessages);
+}
+
+function countValidMessagesWithLoopedRules(rules, messages) {
+  /*
+  In part 2, two rules were changed to this:
+    8: 42 | 42 8
+    11: 42 31 | 42 11 31
+  Since rule 0 = 8 11, it means that to find valid messages, I don't need to get rule 0, but rules 42 & 31
+  */
+  const allRules = decodeRules(rules, ['31', '42']);
+
+  const rule42 = allRules['42'].map(rule => rule.replaceAll(' ', ''));
+  const rule31 = allRules['31'].map(rule => rule.replaceAll(' ', ''));
+
+  let matchingMessages = 0;
+  const isWordValid = (word) => {
+    let remainingLetters = word;
+    let valid = true;
+    let is31Triggered = false; //Once 31 triggers, 42 will become invalid
+    let found42s = 0;
+    let found31s = 0; // there must be at least two 42s and one 31, cause the smallest "8 11" produces "42 42 31"
+    while (valid && remainingLetters.length > 0) {
+      if (!is31Triggered && rule31.some(r => remainingLetters.startsWith(r))) {
+        is31Triggered = true;
+      }
+      if (is31Triggered) {
+        if (rule31.some(r => remainingLetters.startsWith(r))) {
+          remainingLetters = remainingLetters.substring(rule31[0].length);
+          found31s++;
+        } else {
+          valid = false;
+        }
+      } else {
+        if (rule42.some(r => remainingLetters.startsWith(r))) {
+          remainingLetters = remainingLetters.substring(rule42[0].length);
+          found42s++;
+        } else {
+          valid = false;
+        }
+      }
+    }
+    if (found42s < 2 || found31s < 1 || found42s <= found31s) {
+      valid = false;
+    }
+    return valid;
+  }
+
+  messages.forEach(m => {
+    if (isWordValid(m)) {
+      matchingMessages++;
+    }
+  })
+
+  console.log(matchingMessages);
+}
+
+// Day 20
 
 
 
@@ -1165,3 +1290,8 @@ function evaluateAdvancedExpressions(expressions) {
 // evaluateExpressions(day18_expressions);
 // console.log('Day 18, part 2:');
 // evaluateAdvancedExpressions(day18_expressions);
+
+// console.log('Day 19, part 1 (this will take a while):');
+// countValidMessages(day19_rules, day19_messages);
+// console.log('Day 19, part 2:');
+// countValidMessagesWithLoopedRules(day19_rules, day19_messages);

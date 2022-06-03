@@ -996,7 +996,188 @@ function moveParticles(particles, collide = false) {
 }
 
 //Day 21
+const day21_enhancements = fs.readFileSync('./2017/day21.txt', 'utf-8').split('\n');
 
+function drawFractalArt(enhancements, iterations) {
+  let currentGrid = '.#./..#/###'.split('/').map(row => row.split(''));
+  const enhancementsList = {};
+  let gridSize = 3;
+
+  enhancements.forEach(en => {
+    let [pattern, result] = en.split(' => ');
+    result = result.split('/').map(row => row.split(''));
+    // each pattern can be flipped/rotated in 8 different ways:
+    // original
+    pattern = pattern.split('/').map(row => row.split(''));
+    // flipX
+    const flippedPattern = pattern.map(row => [...row].reverse());
+    // rotate90Right of org & flipped
+    const pattern90 = [];
+    const flippedPattern90 = [];
+    for (let y = 0; y < pattern.length; y++) {
+      const row = [];
+      const flippedRow = []
+      for (let x = 0; x < pattern[0].length; x++) {
+        row.push(pattern[pattern.length - x - 1][y]);
+        flippedRow.push(flippedPattern[pattern.length - x - 1][y]);
+      }
+      pattern90.push(row);
+      flippedPattern90.push(flippedRow);
+    }
+    // rotate180 of org & flipped
+    const pattern180 = [...flippedPattern].reverse();
+    const flippedPattern180 = [...pattern].reverse();
+    // rotate270Right of org & flipped
+    const pattern270 = [];
+    const flippedPattern270 = [];
+    for (let y = 0; y < pattern.length; y++) {
+      const row = [];
+      const flippedRow = []
+      for (let x = 0; x < pattern[0].length; x++) {
+        row.push(pattern[x][pattern.length - y - 1]);
+        flippedRow.push(flippedPattern[x][pattern.length - y - 1]);
+      }
+      pattern270.push(row);
+      flippedPattern270.push(flippedRow);
+    }
+
+    const allPatterns = [pattern, pattern90, pattern180, pattern270, flippedPattern, flippedPattern90, flippedPattern180, flippedPattern270];
+    allPatterns.forEach(pattern => {
+      const asString = JSON.stringify(pattern);
+      if (!enhancementsList[asString]) {
+        enhancementsList[asString] = JSON.stringify(result);
+      }
+    });
+  });
+
+  for (let i = 1; i <= iterations; i++) {
+    // splitting one grid into multiple
+    const foundGrids = [];
+    let size = gridSize % 2 === 0 ? 2 : 3;
+
+    while(currentGrid.length > 0) {
+      const thisGrid = [];
+      for (let y = 0; y < size; y++) {
+        const row = currentGrid[y].splice(0, size);
+        thisGrid.push(row);
+      }
+      foundGrids.push(JSON.stringify(thisGrid));
+      if (currentGrid[0].length === 0) {
+        currentGrid.splice(0, size);
+      }
+    }
+
+    // enhancing found grids
+    const enhancedGrids = foundGrids.map(grid => enhancementsList[grid]);
+
+    // combining grids into one
+    gridSize = gridSize / size * (size + 1)
+    const newGrid = [];
+    while (enhancedGrids.length > 0) {
+      let startFrom;
+      if (!newGrid[0]) {
+        startFrom = 0;
+        for (let x = 1; x <= size + 1; x++) { newGrid.push([]) };
+      } else if (newGrid[newGrid.length - 1].length === gridSize) {
+        startFrom = newGrid.length
+        for (let x = 1; x <= size + 1; x++) { newGrid.push([]) };
+      } else {
+        startFrom = newGrid.length - size - 1;
+      }
+
+      for (let i = 0; i < size + 1; i++) {
+        newGrid[startFrom + i].push(...JSON.parse(enhancedGrids[0])[i]);
+      }
+      enhancedGrids.shift();
+    }
+    currentGrid = newGrid;
+    console.log(i)
+  }
+
+  console.log(JSON.stringify(currentGrid).split('').filter(x => x === '#').length);
+}
+
+// Day 22
+const day22_infected_node = fs.readFileSync('./2017/day22.txt', 'utf-8').split('\n').map(row => row.split(''));
+
+function followTheVirus(nodes) {
+  const directions = ['U', 'R', 'D', 'L', 'U'];
+  let causedInfections = 0;
+
+  const nodeCenter = (nodes.length - 1) / 2
+  const virusPosition = [nodeCenter, nodeCenter];
+  let virusDirection = 'U';
+
+  const infectedNodes = [];
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = 0; j < nodes[0].length; j++) {
+      if (nodes[i][j] === '#') infectedNodes.push(`${j}x${i}`);
+    }
+  }
+
+  for (x = 1; x <= 10000; x++) {
+    const pos = virusPosition.join('x');
+    const id = infectedNodes.indexOf(pos);
+    if (id !== -1) {
+      virusDirection = directions[directions.indexOf(virusDirection) + 1];
+      infectedNodes.splice(id, 1);
+    } else {
+      virusDirection = directions[directions.lastIndexOf(virusDirection) - 1];
+      infectedNodes.push(pos);
+      causedInfections++;
+    }
+
+    if (virusDirection === 'U') virusPosition[1]--;
+    if (virusDirection === 'D') virusPosition[1]++;
+    if (virusDirection === 'L') virusPosition[0]--;
+    if (virusDirection === 'R') virusPosition[0]++;
+  }
+
+  console.log(causedInfections);
+}
+
+function followEvolvedVirus(nodes) {
+  const directions = ['U', 'R', 'D', 'L', 'U', 'R'];
+  let causedInfections = 0;
+
+  const nodeCenter = (nodes.length - 1) / 2
+  const virusPosition = [nodeCenter, nodeCenter];
+  let virusDirection = 'U';
+
+  const nodesState = {};
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = 0; j < nodes[0].length; j++) {
+      if (nodes[i][j] === '#') nodesState[`${j}x${i}`] = 'I';
+    }
+  }
+
+  for (x = 1; x <= 10000000; x++) {
+    const pos = virusPosition.join('x');
+    const state = nodesState[pos];
+    if (!state) {
+      virusDirection = directions[directions.lastIndexOf(virusDirection) - 1];
+      nodesState[pos] = 'W';
+    } else if (state === 'W') {
+      nodesState[pos] = 'I';
+      causedInfections++;
+    } else if (state === 'I') {
+      virusDirection = directions[directions.indexOf(virusDirection) + 1];
+      nodesState[pos] = 'F';
+    } else {
+      virusDirection = directions[directions.indexOf(virusDirection) + 2];
+      delete nodesState[pos];
+    }
+
+    if (virusDirection === 'U') virusPosition[1]--;
+    if (virusDirection === 'D') virusPosition[1]++;
+    if (virusDirection === 'L') virusPosition[0]--;
+    if (virusDirection === 'R') virusPosition[0]++;
+  }
+
+  console.log(causedInfections);
+}
+
+// Day 23
 
 
 
@@ -1093,3 +1274,13 @@ function moveParticles(particles, collide = false) {
 // moveParticles(day20_particles);
 // console.log('Day 20, part 2:');
 // moveParticles(day20_particles, true);
+
+// console.log('Day 21, part 1:');
+// drawFractalArt(day21_enhancements, 5);
+// console.log('Day 21, part 2 (this will take a while):');
+// drawFractalArt(day21_enhancements, 18);
+
+// console.log('Day 22, part 1:');
+// followTheVirus(day22_infected_node);
+// console.log('Day 22, part 2:');
+// followEvolvedVirus(day22_infected_node);

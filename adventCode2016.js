@@ -826,6 +826,303 @@ function generateChecksum(init_state, disk_length) {
   console.log(checksum);
 }
 
+//Day 17
+const day17_passcode = fs.readFileSync('./2016/day17.txt', 'utf-8');
+
+function accessSecureVault(passcode) {
+  const openedDoors = ['b', 'c', 'd', 'e', 'f'];
+  let shortestPath;
+  let longestPath;
+
+  const dfs = (position, currentMove = '', moves = []) => {
+    if (currentMove) moves.push(currentMove);
+    const currentPosition = position
+    if (currentPosition === '3x3') {
+      if (!shortestPath || shortestPath.length > moves.length) {
+        shortestPath = moves.join('');
+      }
+      if (!longestPath || longestPath.length < moves.length) {
+        longestPath = moves.join('');
+      }
+      return;
+    }
+
+    const output = MD5(passcode + moves.join('')).substring(0, 4);
+    const possibleDestinations = [];
+    if (position[2] > 0 && openedDoors.includes(output[0])) {
+      possibleDestinations.push('U');
+    }
+    if (position[2] < 3 && openedDoors.includes(output[1])) {
+      possibleDestinations.push('D');
+    }
+    if (position[0] > 0 && openedDoors.includes(output[2])) {
+      possibleDestinations.push('L');
+    }
+    if (position[0] < 3 && openedDoors.includes(output[3])) {
+      possibleDestinations.push('R');
+    }
+    if (possibleDestinations.length === 0) return;
+
+    possibleDestinations.forEach(dest => {
+      const currentPosition = position.split('x').map(Number)
+      if (dest === 'U') currentPosition[1]--;
+      else if (dest === 'D') currentPosition[1]++;
+      else if (dest === 'L') currentPosition[0]--;
+      else if (dest === 'R') currentPosition[0]++;
+
+      dfs(currentPosition.join('x'), dest, [...moves]);
+    })
+  }
+
+  dfs('0x0');
+
+  console.log(shortestPath);
+  console.log(longestPath.length);
+}
+
+// Day 18
+const day18_tiles = fs.readFileSync('./2016/day18.txt', 'utf-8');
+
+function countSafeTiles(firstRow, requiredRows) {
+  let floors = 1;
+  let currentRow = firstRow.split('');
+  let safeTiles = currentRow.filter(x => x === '.').length;
+
+  while (floors < requiredRows) {
+    const newRow = [];
+    for (let i = 0; i < currentRow.length; i++) {
+      let left, center, right;
+      if (currentRow[i - 1] && currentRow[i - 1] === '^') left = true;
+      if (currentRow[i] === '^') center = true;
+      if (currentRow[i + 1] && currentRow[i + 1] === '^') right = true;
+
+      if (
+        (left && center && !right) ||
+        (!left && center && right) ||
+        (left && !center && !right) ||
+        (!left && !center && right)
+      ) {
+        newRow.push('^');
+      } else {
+        newRow.push('.')
+      }
+    }
+    safeTiles += newRow.filter(x => x === '.').length;
+    currentRow = newRow;
+    floors++;
+  }
+
+  console.log(safeTiles);
+}
+
+// Day 19
+const day19_elves = Number(fs.readFileSync('./2016/day19.txt', 'utf-8'));
+
+function findLuckyElf(numberOfElves) {
+  const elves = [];
+  let numberOfEvens = 0;
+  let remainingElves = numberOfElves;
+  while (remainingElves % 2 === 0) {
+    numberOfEvens ++;
+    remainingElves /= 2;
+  }
+  const skipBy = Math.pow(2, numberOfEvens);
+
+  for (let i = 1; i <= numberOfElves; i += skipBy) {
+    elves.push(i)
+  }
+
+  let willLose = 1;
+  while (elves.length > 1) {
+    elves.splice(willLose, 1);
+    willLose ++;
+    if (willLose === elves.length) willLose = 0;
+    else if (willLose > elves.length) willLose = 1;
+
+    if (willLose === 0 || willLose === 1) {
+      console.log(elves.length)
+    }
+  }
+  console.log(elves[0]);
+}
+
+function findLuckyElf2(numberOfElves) {
+  const elves = Array.from({length: numberOfElves}, (_, i) => i + 1);
+  while (elves.length > 1) {
+    const half = Math.floor(elves.length / 2);
+    elves.splice(half, 1);
+    const toEnd = elves.shift();
+    elves.push(toEnd);
+    if (elves.length % 100000 === 0) {
+      const pct = (1 - (elves.length / numberOfElves)) * 100;
+      console.log('Processing... ' + pct.toFixed(2) + '%');
+    }
+  }
+  console.log(elves[0]);
+}
+
+
+// Day 20
+const day20_blockedIPs = fs.readFileSync('./2016/day20.txt', 'utf-8').split('\n');
+
+function findLowestValuedIP(blockedList) {
+  const NUMBERS_REGEX = /[0-9]+/g;
+  const bannedIPs = blockedList.map(ips => ips.match(NUMBERS_REGEX).map(Number));
+
+  let lowestPossible = 0;
+  let foundBanned = bannedIPs.find(ips => ips[0] <= lowestPossible && ips[1] >= lowestPossible);
+  while (foundBanned) {
+    lowestPossible = foundBanned[1] + 1;
+    foundBanned = bannedIPs.find(ips => ips[0] <= lowestPossible && ips[1] >= lowestPossible);
+  }
+  console.log(lowestPossible)
+}
+
+function findAllowedIPs(blockedList) {
+  const NUMBERS_REGEX = /[0-9]+/g;
+  const bannedIPs = blockedList.map(ips => ips.match(NUMBERS_REGEX).map(Number));
+  const allowedIPs = [];
+
+  let lowestPossible = 0;
+  let foundBanned = bannedIPs.find(ips => ips[0] === lowestPossible && ips[1] >= lowestPossible);
+  while (lowestPossible <= 4294967295) {
+    if (foundBanned) {
+      lowestPossible = foundBanned[1] + 1;
+    } else {
+      allowedIPs.push(lowestPossible);
+      lowestPossible++;
+    }
+    foundBanned = bannedIPs.find(ips => ips[0] <= lowestPossible && ips[1] >= lowestPossible);
+  }
+
+  console.log(allowedIPs.length);
+}
+
+// Day 21
+const day21_operations = fs.readFileSync('./2016/day21.txt', 'utf-8').split('\n');
+
+function scrambleLetters(input, operations) {
+  const NUMBERS_REGEX = /[0-9]+/g;
+  let hash = input.split('');
+
+  operations.forEach(op => {
+    if (op.startsWith('swap position')) {
+      const positions = op.match(NUMBERS_REGEX).map(Number);
+      let tempHash = [...hash];
+      tempHash[positions[1]] = hash[positions[0]];
+      tempHash[positions[0]] = hash[positions[1]];
+      hash = [...tempHash];
+    } else if (op.startsWith('swap letter')) {
+      const letter1 = op.substring(12,13);
+      const letter2 = op.substring(26);
+      const positions = [hash.indexOf(letter1), hash.indexOf(letter2)];
+      let tempHash = [...hash];
+      tempHash[positions[1]] = hash[positions[0]];
+      tempHash[positions[0]] = hash[positions[1]];
+      hash = [...tempHash];
+    } else if (op.startsWith('rotate left')) {
+      const X = op.match(NUMBERS_REGEX).map(Number)[0];
+      const toRotate = hash.splice(0, X);
+      hash.push(...toRotate);
+    } else if (op.startsWith('rotate right')) {
+      const X = op.match(NUMBERS_REGEX).map(Number)[0];
+      const toRotate = hash.splice(X * -1);
+      hash.unshift(...toRotate);
+    } else if (op.startsWith('rotate based on')) {
+      const letter = op.substring(35);
+      let X = hash.indexOf(letter);
+      if (X >= 4) X++;
+      X++;
+      if (X >= hash.length) X -= hash.length;
+      const toRotate = hash.splice(X * -1);
+      hash.unshift(...toRotate);
+    } else if (op.startsWith('reverse')) {
+      const positions = op.match(NUMBERS_REGEX).map(Number);
+      let tempHash = hash.splice(positions[0], positions[1] - positions[0] + 1);
+      tempHash = tempHash.reverse();
+      hash.splice(positions[0], 0, ...tempHash);
+    } else { // move
+      const positions = op.match(NUMBERS_REGEX).map(Number);
+      const letter = hash.splice(positions[0], 1);
+      hash.splice(positions[1], 0, letter[0]);
+    }
+  });
+
+  console.log(hash.join(''));
+}
+
+function unscrambleLetters (input, operations) {
+  const NUMBERS_REGEX = /[0-9]+/g;
+  let hash = input.split('');
+
+  const rotateLeft = (X) => {
+    const toRotate = hash.splice(X * -1);
+    hash.unshift(...toRotate);
+  }
+  const rotateRight = (X) => {
+    const toRotate = hash.splice(0, X);
+    hash.push(...toRotate);
+  }
+
+  operations.forEach(op => {
+    if (op.startsWith('swap position')) {
+      const positions = op.match(NUMBERS_REGEX).map(Number);
+      let tempHash = [...hash];
+      tempHash[positions[1]] = hash[positions[0]];
+      tempHash[positions[0]] = hash[positions[1]];
+      hash = [...tempHash];
+    } else if (op.startsWith('swap letter')) {
+      const letter1 = op.substring(12,13);
+      const letter2 = op.substring(26);
+      const positions = [hash.indexOf(letter1), hash.indexOf(letter2)];
+      let tempHash = [...hash];
+      tempHash[positions[1]] = hash[positions[0]];
+      tempHash[positions[0]] = hash[positions[1]];
+      hash = [...tempHash];
+    } else if (op.startsWith('rotate left')) {
+      const X = op.match(NUMBERS_REGEX).map(Number)[0];
+      rotateLeft(X);
+    } else if (op.startsWith('rotate right')) {
+      const X = op.match(NUMBERS_REGEX).map(Number)[0];
+      rotateRight(X);
+    } else if (op.startsWith('rotate based on')) {
+      // Had to reverse engineer it a little and see how the string behaves during scrambling in this operation.
+      // And that's how this object below was created. The whole block looks really weird and unintuitive but well ;_;
+      const movements = {
+        0: -1,
+        1: -1,
+        2: 2,
+        3: -2,
+        4: 1,
+        5: -3,
+        6: 0,
+        7: -4,
+      }
+      const letter = op.substring(35);
+      const X = hash.indexOf(letter);
+      const moveBy = movements[X];
+      // Left is right and right is left because we're reversing everything, so:
+      if (moveBy > 0) {
+        rotateLeft(moveBy);
+      } else if (moveBy < 0) {
+        rotateRight(moveBy * -1);
+      }
+    } else if (op.startsWith('reverse')) {
+      const positions = op.match(NUMBERS_REGEX).map(Number);
+      let tempHash = hash.splice(positions[0], positions[1] - positions[0] + 1);
+      tempHash = tempHash.reverse();
+      hash.splice(positions[0], 0, ...tempHash);
+    } else { // move
+      const positions = op.match(NUMBERS_REGEX).map(Number);
+      const letter = hash.splice(positions[1], 1);
+      hash.splice(positions[0], 0, letter[0]);
+    }
+  });
+
+  console.log(hash.join(''));
+}
+
+// Day 22
 
 
 
@@ -908,3 +1205,26 @@ function generateChecksum(init_state, disk_length) {
 // generateChecksum(day16_init_state, 272);
 // console.log('Day 16, part 2:');
 // generateChecksum(day16_init_state, 35651584);
+
+// console.log('Day 17, part 1 & 2:');
+// accessSecureVault(day17_passcode);
+
+// console.log('Day 18, part 1:');
+// countSafeTiles(day18_tiles, 40);
+// console.log('Day 18, part 2:');
+// countSafeTiles(day18_tiles, 400000);
+
+// console.log('Day 19, part 1 (this will take a few minutes):');
+// findLuckyElf(day19_elves);
+// console.log('Day 19, part 2 (this will take even longer - about 1.5 hours in my case :c)');
+// findLuckyElf2(day19_elves);
+
+// console.log('Day 20, part 1:');
+// findLowestValuedIP(day20_blockedIPs);
+// console.log('Day 20, part 2:');
+// findAllowedIPs(day20_blockedIPs);
+
+// console.log('Day 21, part 1:');
+// scrambleLetters('abcdefgh', day21_operations);
+// console.log('Day 21, part 2:');
+// unscrambleLetters('fbgdceah', day21_operations.reverse());

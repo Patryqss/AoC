@@ -2,16 +2,21 @@ const fs = require("fs");
 const permutations = require("./permutations");
 
 // Computer created during day 5 and expanded on each other day when needed.
-// So far used in days: 2, 5, 7, 9, 11, 13
+// So far used in days: 2, 5, 7, 9, 11, 13, 15
 class IntCodeComputer {
-  constructor(opcode, input, preserveOutput = false) {
+  constructor(
+    opcode, // number[]
+    input, // number[]
+    preserveOutput = false, // boolean; determines if output should be replaced or preserved in array
+    advancedOptions = null // Used only for cloning function
+  ) {
     this.opcode = opcode;
     this.input = input;
-    this.pointer = 0;
-    this.relativeBase = 0;
-    this.output = null;
-    this.active = false;
-    this.inPause = false;
+    this.pointer = advancedOptions ? advancedOptions.pointer : 0;
+    this.relativeBase = advancedOptions ? advancedOptions.relativeBase : 0;
+    this.output = advancedOptions ? advancedOptions.output : null;
+    this.active = advancedOptions ? advancedOptions.active : false;
+    this.inPause = advancedOptions ? advancedOptions.inPause : false;
     this.preserveOutput = preserveOutput;
   }
 
@@ -140,6 +145,21 @@ class IntCodeComputer {
         this[`op${operation}`](a, b, thirdParamMode);
       }
     }
+  }
+
+  cloneComputer() {
+    return new IntCodeComputer(
+      [...this.opcode],
+      [...this.input],
+      this.preserveOutput,
+      {
+        pointer: this.pointer,
+        relativeBase: this.relativeBase,
+        output: this.output,
+        active: this.active,
+        inPause: this.inPause
+      }
+    );
   }
 }
 
@@ -888,7 +908,158 @@ function produceFuel(reactions) {
 }
 
 //Day 15
+const day15_opcodes = fs.readFileSync('./2019/day15.txt', 'utf-8').split(',').map(Number);
 
+function navigateDriod(opcodes) {
+  const computer = new IntCodeComputer(opcodes, []);
+  const visitedLocations = ['0x0'];
+  const possibleDestinations = [1, 2, 3, 4];
+  let shortestPath;
+  let positionOfOxygen;
+
+  const dfs = (comp, currentMove = '', currentPosition = '0x0', moves = 0) => {
+    if (currentMove) moves++;
+
+    let newPosition = currentPosition.split('x').map(Number);
+    if (currentMove === 1) newPosition[1]--;
+    if (currentMove === 2) newPosition[1]++;
+    if (currentMove === 3) newPosition[0]--;
+    if (currentMove === 4) newPosition[0]++;
+    newPosition = newPosition.join('x');
+
+    comp.addInput(currentMove);
+    comp.runComputer();
+    const output = comp.getOutput();
+
+    if (output === 0 || visitedLocations.includes(newPosition)) {
+      return;
+    }
+    else if (output === 2) {
+      if (!shortestPath || shortestPath > moves) {
+        shortestPath = moves;
+      }
+      positionOfOxygen = newPosition;
+      return;
+    };
+    visitedLocations.push(newPosition);
+
+    let destinations;
+    // Avoid going up-down or left-right endlessly
+    if (currentMove === 1) destinations = [1,3,4];
+    if (currentMove === 2) destinations = [2,3,4];
+    if (currentMove === 3) destinations = [1,2,3];
+    if (currentMove === 4) destinations = [1,2,4];
+
+    destinations.forEach(dest => {
+      dfs(comp.cloneComputer(), dest, newPosition, moves);
+    })
+  }
+
+  possibleDestinations.forEach(dest => {
+    dfs(computer.cloneComputer(), dest);
+  })
+
+  console.log(shortestPath)
+  return { visitedLocations, positionOfOxygen };
+}
+
+function drawShip(shipAreaData) {
+  // Just a helper function for debugging
+  const oxygenPosition = shipAreaData.positionOfOxygen.split('x').map(Number);;
+  let locationsToFill = shipAreaData.visitedLocations;
+  let minX, minY, maxX, maxY;
+  locationsToFill.forEach(l => {
+    const [x,y] = l.split('x').map(Number);
+    if (!minX || minX > x) minX = x;
+    if (!minY || minY > y) minY = y;
+    if (!maxX || maxX < x) maxX = x;
+    if (!maxY || maxY < y) maxY = y;
+  })
+
+  const ship = Array(maxY - minY +1).fill(' ').map(() => Array(maxX - minX + 1).fill(' '));
+
+  locationsToFill.forEach(loc => {
+    const [x,y] = loc.split('x').map(Number);
+    ship[y-minY][x-minX] = '#'
+  })
+  ship[oxygenPosition[1]-minY][oxygenPosition[0]-minX] = 'O';
+
+  console.log(JSON.stringify(ship));
+}
+
+function fillShipWithOxygen(shipAreaData) {
+  const oxygenPosition = shipAreaData.positionOfOxygen;
+  let locationsToFill = [...shipAreaData.visitedLocations, shipAreaData.positionOfOxygen];
+
+  const route = new Graph();
+  locationsToFill.forEach(loc => {
+    const from = loc.split('x').map(Number);
+    const to = new Map();
+    if (locationsToFill.includes(`${from[0]-1}x${from[1]}`)) to.set(`${from[0]-1}x${from[1]}`, 1);
+    if (locationsToFill.includes(`${from[0]+1}x${from[1]}`)) to.set(`${from[0]+1}x${from[1]}`, 1);
+    if (locationsToFill.includes(`${from[0]}x${from[1]-1}`)) to.set(`${from[0]}x${from[1]-1}`, 1);
+    if (locationsToFill.includes(`${from[0]}x${from[1]+1}`)) to.set(`${from[0]}x${from[1]+1}`, 1);
+
+    route.addNode(loc, to);
+  });
+
+  const paths = [];
+  locationsToFill.forEach(loc => {
+    const path = route.path(oxygenPosition, loc, { cost: true }).cost;
+    if (path) {
+      paths.push(path);
+    }
+  })
+  console.log(Math.max(...paths));
+}
+
+// Day 16
+const day16_numbers = fs.readFileSync('./2019/day16.txt', 'utf-8').split('').map(Number);
+
+function cleanFFTSignal(input, phases) {
+  let currentInput = input;
+  const repeatingPattern = [0, 1, 0, -1];
+
+  for (let i = 1; i <= phases; i++) {
+    const newInput = [];
+    for (let x = 1; x <= currentInput.length; x++) {
+      const output = currentInput.reduce((acc, value, id) => acc + value * repeatingPattern[Math.floor((id + 1) / x) % repeatingPattern.length], 0);
+      const trimmedOutput = Math.abs(output) % 10;
+      newInput.push(trimmedOutput);
+    }
+    currentInput = newInput;
+  }
+  console.log(currentInput.slice(0, 8).join(''));
+}
+
+function cleanRealFFTSignal(input, phases) {
+  // The length here is too big to be kept in an array
+  let currentInput = '';
+  for (let x = 1; x <= 10000; x++) {
+    currentInput += input;
+  }
+  const repeatingPattern = [0, 1, 0, -1];
+
+  for (let i = 1; i <= phases; i++) {
+    let newInput = '';
+    for (let x = 1; x <= currentInput.length; x++) {
+      let output = 0;
+      for (let id = 0; id < currentInput.length; id++) {
+        output += currentInput[id] * repeatingPattern[Math.floor((id + 1) / x) % repeatingPattern.length];
+      }
+      console.log(output, Math.abs(output) % 10)
+      const trimmedOutput = Math.abs(output) % 10;
+      newInput += trimmedOutput.toString();
+    }
+    currentInput = newInput;
+    console.log(`Phase ${i} finished`);
+    fs.writeFileSync('./2019/day16_input.txt', newInput);
+  }
+  const offset = Number(input.substring(0, 7));
+  console.log(currentInput.substring(offset, offset + 8));
+}
+
+cleanRealFFTSignal(day16_numbers.join(''), 100);
 
 
 
@@ -962,3 +1133,11 @@ function produceFuel(reactions) {
 
 // console.log('Day 14, part 1 & 2:');
 // produceFuel(day14_reactions);
+
+// console.log('Day 15, part 1:');
+// const shipAreaData = navigateDriod(day15_opcodes);
+// console.log('Day 15, part 2:');
+// fillShipWithOxygen(shipAreaData);
+
+// console.log('Day 16, part 1:');
+// cleanFFTSignal(day16_numbers, 100);

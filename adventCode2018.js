@@ -1551,7 +1551,6 @@ function simulateWaterFlow(clays) {
   }
 
   // Creating a visualisation
-  const cc = biggestX - smallestX;
   const lights = Array(biggestY+1).fill('.').map(() => Array(biggestX - smallestX + 1).fill(''));
   for (let i = 0; i < biggestY+1; i++) {
     for (let j = 0; j < biggestX - smallestX+1; j++) {
@@ -1725,6 +1724,149 @@ function simulateRegisterWork() {
   console.log(A);
 }
 
+// Day 20
+const day20_regex = fs.readFileSync('./2018/day20.txt', 'utf-8');
+const DIR_REGEX = /N|E|S|W/;
+
+function getRoomsAndDoorsFromRegex(fullRegex) {
+  const routes = {};
+  const regex = fullRegex.substring(1, fullRegex.length - 1);
+  const position = [0, 0];
+
+  resolveParenthesis(regex, position, routes);
+
+  const dijkstra = new Graph();
+  const xs = new Set(), ys = new Set();
+
+  Object.entries(routes).forEach(([from, to]) => {
+    dijkstra.addNode(from, to);
+
+    xs.add(Number(from.split('x')[0]));
+    ys.add(Number(from.split('x')[1]));
+    Object.keys(to).forEach(dest => {
+      const [x, y] = dest.split('x');
+      xs.add(Number(x));
+      ys.add(Number(y));
+    })
+  });
+
+  const smallestX = Math.min(...xs);
+  const biggestX = Math.max(...xs);
+  const smallestY = Math.min(...ys);
+  const biggestY = Math.max(...ys);
+
+  let furthestRoom = 0;
+  let over1000 = 0;
+
+  for(let x = smallestX; x <= biggestX; x++) {
+    for (let y = smallestY; y <= biggestY; y++) {
+      const distance = dijkstra.path('0x0', `${x}x${y}`, { cost: true }).cost;
+      if (distance > furthestRoom) furthestRoom = distance
+      if (distance >= 1000) over1000++;
+    }
+  }
+
+  console.log(furthestRoom);
+  console.log(over1000);
+}
+
+function updatePositionAndRoute(pos, dir, routes) {
+  const newPos = [...pos];
+  if (dir === 'N') newPos[1]--;
+  if (dir === 'E') newPos[0]++;
+  if (dir === 'S') newPos[1]++;
+  if (dir === 'W') newPos[0]--;
+
+  if(routes[pos.join('x')]) {
+    routes[pos.join('x')] = {...routes[pos.join('x')], [newPos.join('x')]: 1}
+  } else {
+    routes[pos.join('x')] = {[newPos.join('x')]: 1}
+  }
+  return newPos;
+}
+
+function findContentOfParenthesis(regex) {
+  let openings = 0;
+  let content;
+  for (let i = 0; i < regex.length; i++) {
+    if (regex[i] === '(') openings++;
+    if (regex[i] === ')') openings--;
+    if (openings === 0) {
+      content = regex.substring(1, i);
+      break;
+    }
+  }
+  return content;
+}
+
+function resolveParenthesis(content, position, routes) {
+  let endPositions = [];
+  let currentPosition = position;
+  let multiplePositions = null;
+  let wasOR = false;
+  let regex = content;
+  let finished = false;
+
+  while (!finished) {
+    if (!multiplePositions) {
+      if (regex[0] && regex[0].match(DIR_REGEX)) {
+        currentPosition = updatePositionAndRoute(currentPosition, regex[0], routes);
+        regex = regex.substring(1);
+        wasOR = false;
+      } else if (regex[0] === '|') {
+        endPositions.push(currentPosition);
+        currentPosition = position;
+        regex = regex.substring(1);
+        wasOR = true;
+      } else if (regex[0] === '(') {
+        const inside = findContentOfParenthesis(regex);
+        regex = regex.replace(`(${inside})`, '');
+        const newPositions = resolveParenthesis(inside, currentPosition, routes);
+        multiplePositions = newPositions;
+        currentPosition = position;
+        wasOR = false;
+      } else {
+        // nothing more
+        endPositions.push(currentPosition);
+        finished = true;
+      }
+    } else {
+      if (regex[0] && regex[0].match(DIR_REGEX)) {
+        multiplePositions = multiplePositions.map(p => updatePositionAndRoute(p, regex[0], routes));
+        regex = regex.substring(1);
+        wasOR = false;
+      } else if (regex[0] === '|') {
+        endPositions.push(...multiplePositions);
+        multiplePositions = null;
+        regex = regex.substring(1);
+        wasOR = true;
+      } else if (regex[0] === '(') {
+        const inside = findContentOfParenthesis(regex);
+        regex = regex.replace(`(${inside})`, '');
+        let newPositions = [];
+        multiplePositions.forEach(p => {
+          const pos = resolveParenthesis(inside, p, routes);
+          newPositions.push(...pos);
+        })
+        multiplePositions = newPositions;
+        wasOR = false;
+      } else {
+        // nothing more
+        endPositions.push(...multiplePositions);
+        if (wasOR) {
+          console.log('Unexpected content');
+        }
+        finished = true;
+      }
+    }
+  }
+
+  const endJoined = endPositions.map(p => p.join('x'));
+  const endNoRepeats = new Set(endJoined);
+  return [...endNoRepeats].map(p => p.split('x').map(Number));
+}
+
+// Day 21
 
 
 
@@ -1818,3 +1960,6 @@ function simulateRegisterWork() {
 // runRegisterProgram(day19_instructions);
 // console.log('Day 19, part 2:');
 // simulateRegisterWork();
+
+// console.log('Day 20, part 1 & 2 (this will take a while):')
+// getRoomsAndDoorsFromRegex(day20_regex);
