@@ -836,7 +836,7 @@ const [day19_replacements, day19_medicine] = fs.readFileSync('./2015/day19.txt',
 
 function findDistinctMolecules(replacements, medicine) {
   const reps = replacements.split('\n').map(row => row.match(/[A-Za-z]+/g))
-  const molecules = [];
+  const molecules = new Set();
 
   reps.forEach(([from, to]) => {
     let startAt = 0;
@@ -844,17 +844,204 @@ function findDistinctMolecules(replacements, medicine) {
       const toReplace = medicine.indexOf(from, startAt);
       const molecule = medicine.split('');
       molecule.splice(toReplace, from.length, to);
-      molecules.push(molecule.join(''));
+      molecules.add(molecule.join(''));
       startAt = toReplace + 1;
     }
   });
 
-  console.log(new Set(molecules).size)
+  console.log(molecules.size)
 }
 
 //Part 2
-// ?????
+/*
+This was a hard one. I tried with DFS, BFS, going forwards, backwards, even checking text similarity, but nothing worked
+Turned out, that the easiest possible solution worked just fine, but I didn't use it at the beggining, thinking it would be too obvious. I guess I was just lucky with my input.
+*/
 
+function countStepsToMedicine(replacements, medicine) {
+  const reps = replacements.split('\n').map(row => row.match(/[A-Za-z]+/g))
+  reps.sort((a, b) => b[1].length - a[1].length);
+  let medicineLeft = medicine;
+  let steps = 0;
+
+  while (medicineLeft.length !== 1) {
+    for (let i = 1; i < reps.length; i++) {
+      if (medicineLeft.includes(reps[i][1])) {
+        const toReplace = medicineLeft.indexOf(reps[i][1]);
+        const molecule = medicineLeft.split('');
+        molecule.splice(toReplace, reps[i][1].length, reps[i][0]);
+        medicineLeft = molecule.join('');
+        steps++;
+      }
+    }
+  }
+  console.log(steps)
+}
+
+// Day 20
+const day20_target = Number(fs.readFileSync('./2015/day20.txt', 'utf-8'));
+
+function findHouseWithTargetPresents(target) {
+  const realTarget = target / 10 //Each elf gives 10 times more presents
+
+  // It's safe to assume that the answer will probably end with 0, as those numbers have the most divisors
+  for (let i = (realTarget / 10); i < realTarget; i+= 10) {
+    let sumOfDivisors = 0;
+    for (let x = 1; x * x <= i; x++) {
+      if (i % x === 0) {
+        sumOfDivisors += x;
+        if (i / x !== x) {
+          sumOfDivisors += i / x;
+        }
+      }
+    }
+    if (sumOfDivisors > realTarget) {
+      console.log(i)
+      break;
+    }
+  }
+}
+
+function findHouseWithTargetPresents2(target) {
+  const realTarget = Math.floor(target / 11) //Each elf gives 11 times more presents
+
+  for (let i = Math.floor(realTarget / 5); i < realTarget; i++) {
+    let sumOfDivisors = 0;
+    for (let x = 1; x * x <= i; x++) {
+      if (i % x === 0) {
+        if (i / 50 <= x) {
+          sumOfDivisors += x;
+        }
+        if (i / x !== x && i / 50 <= i / x) {
+          sumOfDivisors += i / x;
+        }
+      }
+    }
+    if (sumOfDivisors > realTarget) {
+      console.log(i)
+      break;
+    }
+  }
+}
+
+// Day 21
+const day21_stats = fs.readFileSync('./2015/day21.txt', 'utf-8');
+
+function buyWeapon(data) {
+  const weapons = [
+    { cost: 8, damage: 4, armor: 0 },
+    { cost: 10, damage: 5, armor: 0 },
+    { cost: 25, damage: 6, armor: 0 },
+    { cost: 40, damage: 7, armor: 0 },
+    { cost: 74, damage: 8, armor: 0 }
+  ];
+  const availableWeapons = weapons.filter(w => w.cost <= data.coinsLeft);
+  const weaponsData = [];
+  availableWeapons.forEach(w => {
+    weaponsData.push({ ...data, coinsLeft: data.coinsLeft - w.cost, dmg: w.damage });
+  })
+  return weaponsData;
+}
+
+function buyArmor(data) {
+  const armors = [
+    { cost: 13, damage: 0, armor: 1 },
+    { cost: 31, damage: 0, armor: 2 },
+    { cost: 53, damage: 0, armor: 3 },
+    { cost: 75, damage: 0, armor: 4 },
+    { cost: 102, damage: 0, armor: 5 }
+  ];
+  const availableArmors = armors.filter(a => a.cost <= data.coinsLeft);
+  const armorsData = [{ ...data }]; //include scenario when no armor is bought
+  availableArmors.forEach(a => {
+    armorsData.push({ ...data, coinsLeft: data.coinsLeft - a.cost, ar: a.armor })
+  })
+  return armorsData;
+}
+
+function buyRings(data) {
+  const rings = [
+    { cost: 20, damage: 0, armor: 1, id: 1 },
+    { cost: 25, damage: 1, armor: 0, id: 2 },
+    { cost: 40, damage: 0, armor: 2, id: 3 },
+    { cost: 50, damage: 2, armor: 0, id: 4 },
+    { cost: 80, damage: 0, armor: 3, id: 5 },
+    { cost: 100, damage: 3, armor: 0, id: 6 }
+  ];
+  const availableRings = rings.filter(r => r.cost <= data.coinsLeft);
+  const ringsData = [];
+  availableRings.forEach(r => {
+    const availableSecondRings = rings.filter(sr => sr.cost <= data.coinsLeft - r.cost && sr.id !== r.id);
+    if (availableSecondRings.length === 0) {
+      ringsData.push({ ...data, coinsLeft: data.coinsLeft - r.cost, ar: data.ar + r.armor, dmg: data.dmg + r.damage });
+    } else {
+      availableSecondRings.forEach(sr => {
+        ringsData.push({ ...data, coinsLeft: data.coinsLeft - r.cost - sr.cost, ar: data.ar + r.armor + sr.armor, dmg: data.dmg + r.damage + sr.damage });
+      })
+    }
+  })
+  return ringsData;
+}
+
+function checkBattleResult(player, boss) {
+  const dmgToBoss = Math.max(player.damage - boss.armor, 1);
+  const turnsToDefeatBoss = Math.ceil(boss.hp / dmgToBoss);
+
+  const dmgToPlayer = Math.max(boss.damage - player.armor, 1);
+  const turnsToDefeatPlayer = Math.ceil(player.hp / dmgToPlayer);
+
+  return turnsToDefeatBoss <= turnsToDefeatPlayer;
+}
+
+function getBestAndWorstEquipment(stats) {
+  const boss = stats.match(/[0-9]+/g).map(Number);
+  const bossStats = { hp: boss[0], damage: boss[1], armor: boss[2] };
+  let spentCoins = 0;
+  let fightResults = [];
+  let winningEq = null;
+  let lastLosingEq = null;
+  const initialPlayerData = {
+    coinsLeft: 0,
+    dmg: 0,
+    ar: 0,
+  }
+
+  const checkEq = (data) => {
+    fightResults.push(checkBattleResult({ hp: 100, damage: data.dmg, armor: data.ar }, bossStats));
+  }
+
+  while (spentCoins < 356 /* Most expensive eq */) {
+    spentCoins++;
+    fightResults = [];
+    const data = { ...initialPlayerData, coinsLeft: spentCoins }
+    const weaponsData = buyWeapon(data);
+    weaponsData.forEach(wd => {
+      if (wd.coinsLeft === 0) checkEq(wd);
+      else {
+        const armorsData = buyArmor(wd);
+        armorsData.forEach(ad => {
+          if (ad.coinsLeft === 0) checkEq(ad);
+          else {
+            const ringsData = buyRings(ad);
+            ringsData.forEach(rd => {
+              if (rd.coinsLeft === 0) checkEq(rd);
+            })
+          }
+        })
+      }
+    });
+
+    if (fightResults.length > 0) {
+      if (fightResults.some(r => r) && !winningEq) winningEq = spentCoins;
+      if (fightResults.some(r => !r)) lastLosingEq = spentCoins;
+    }
+  }
+
+  console.log(winningEq);
+  console.log(lastLosingEq);
+}
+
+// Day 22
 
 
 // -----Answers for solved days-----
@@ -943,3 +1130,13 @@ function findDistinctMolecules(replacements, medicine) {
 
 // console.log('Day 19, part 1:');
 // findDistinctMolecules(day19_replacements, day19_medicine);
+// console.log('Day 19, part 2:');
+// countStepsToMedicine(day19_replacements, day19_medicine)
+
+// console.log('Day 20, part 1:');
+// findHouseWithTargetPresents(day20_target);
+// console.log('Day 20, part 2:');
+// findHouseWithTargetPresents2(day20_target);
+
+// console.log('Day 21, part 1 & 2:');
+// getBestAndWorstEquipment(day21_stats);

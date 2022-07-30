@@ -230,17 +230,19 @@ function findUnbalance(programs) {
         holding.forEach(name => childrenWeight.push(getFullWeight(progsWithWeight[name])))
         if (!childrenWeight.every(v => v === childrenWeight[0])) {
           foundUnbalance = true;
-          console.log('Unbalance found. Find index of wrong weight from this array:');
-          console.log(childrenWeight)
-          console.log('Now pick a values from this index and fix first value to match weight of others. That\'ll be the answer')
-          holding.forEach(name => console.log(progsWithWeight[name]));
+          const balancedValue = childrenWeight.find(w => childrenWeight[0] !== childrenWeight[1] ? w === childrenWeight[2] : w === childrenWeight[0]);
+          holding.forEach(name => {
+            const weights = progsWithWeight[name];
+            if (getFullWeight(weights) !== balancedValue) {
+              const fixedWeight = balancedValue - weights[1];
+              console.log(fixedWeight);
+            }
+          })
         }
         progsWithWeight[name] = [Number(weight), getFullWeight(childrenWeight)];
       }
     })
   }
-
-  return progsWithWeight;
 }
 
 //Day 8
@@ -1178,7 +1180,147 @@ function followEvolvedVirus(nodes) {
 }
 
 // Day 23
+const day23_instructions = fs.readFileSync('./2017/day23.txt', 'utf-8').split('\n')
 
+function runCoprocessor(instructions, initialRegister, stopAfter) {
+  const registers = initialRegister;
+  let position = 0;
+  let mulTriggered = 0;
+  let operationsDone = 0;
+
+  while((position >= 0 && position < instructions.length)) {
+    const [command, register, val] = instructions[position].split(' ');
+    const value = !isNaN(Number(val)) ? Number(val) : registers[val] ?? 0;
+    if (command === 'set') {
+      registers[register] = value;
+      position++;
+    } else if (command === 'sub') {
+      if (registers[register]) {
+        registers[register] -= value;
+      } else {
+        registers[register] = value * -1;
+      }
+      position++;
+    } else if (command === 'mul') {
+      if (registers[register]) {
+        registers[register] *= value;
+      } else {
+        registers[register] = 0;
+      }
+      position++;
+      mulTriggered++;
+    } else {
+      if (registers[register] || !isNaN(register)) {
+        position += value
+      } else {
+        position++;
+      }
+    }
+    operationsDone++;
+    if (stopAfter && operationsDone > stopAfter) {
+      break;
+    }
+  }
+
+  if (stopAfter) {
+    return registers;
+  } else {
+    console.log(mulTriggered);
+  }
+}
+
+function calcOverheatingProcessorProgram(instructions) {
+  /*
+  In part 2, the program would run for a huge amount of time, so I had to check what happens inside registers.
+  Turned out that it counts how many composite numbers are in the range of B <= x <= C, adding 17 to x after every check
+  */
+  let compositeNumbers = 0;
+  const registers = runCoprocessor(instructions, { a: 1 }, 12);
+
+  for (let i = registers.b; i <= registers.c; i += 17) {
+    for (let x = 2; x < i; x++) {
+      if (i % x === 0) {
+        compositeNumbers++;
+        break;
+      }
+    }
+  }
+  console.log(compositeNumbers)
+}
+
+// Day 24
+const day24_components = fs.readFileSync('./2017/day24.txt', 'utf-8').split('\n');
+
+function findStrongestBridge(components, checkLength = false) {
+  const availableComponents = components.map(c => c.split('/').map(Number));
+  let strongestBridge = 0;
+  let longestBridge = 0;
+
+  const dfs = (toConnect, usedComponents = [], componentsToUse = [...availableComponents]) => {
+    const matchingComponents = componentsToUse.filter(comp => comp.includes(toConnect));
+    const bridgeLength = usedComponents.length
+
+    if (matchingComponents.length === 0 && bridgeLength > 0) {
+      const bridgeStrength = usedComponents.reduce((a,b) => a + b);
+      if (!checkLength || (checkLength && bridgeLength >= longestBridge)) {
+        if (bridgeStrength > strongestBridge || (checkLength && bridgeLength > longestBridge)) strongestBridge = bridgeStrength
+        longestBridge = bridgeLength
+        return;
+      }
+    }
+
+    matchingComponents.forEach(matchingComp => {
+      let nextToConnect = matchingComp[0] === toConnect ? matchingComp[1] : matchingComp[0]
+      const leftToUse = componentsToUse.filter(comp => comp.join(',') !== matchingComp.join(','));
+      dfs(nextToConnect, [...usedComponents, ...matchingComp], leftToUse);
+    })
+  }
+  dfs(0);
+
+  console.log(strongestBridge);
+}
+
+// Day 25
+const day25_instructions = fs.readFileSync('./2017/day25.txt', 'utf-8').split('\n\n');
+
+function runTuringMachine(instructions) {
+  const baseInstruction = instructions.shift();
+  const steps = Number(baseInstruction.match(/[0-9]+/g)[0])
+  const states = ['A', 'B', 'C', 'D', 'E', 'F'];
+  const statesInstructions = instructions.map(i => i.split('If'));
+
+  let currentState = 'A';
+  let currentPosition = 0;
+  const activeValues = new Set();
+
+  for (let i = 1; i <= steps; i++) {
+    const currentInstruction = statesInstructions[states.indexOf(currentState)];
+    let part;
+    if (!activeValues.has(currentPosition)) {
+      part = 1;
+    } else {
+      part = 2;
+    }
+
+    const shouldWrite = Number(currentInstruction[part].match(/[0-9]+/g)[1])
+    if (shouldWrite === 1) {
+      activeValues.add(currentPosition);
+    } else {
+      activeValues.delete(currentPosition);
+    }
+
+    if (currentInstruction[part].includes('right')) {
+      currentPosition++;
+    } else {
+      currentPosition--;
+    }
+
+    const indexOfNextState = currentInstruction[part].indexOf('with state') + 11;
+    currentState = currentInstruction[part][indexOfNextState];
+  }
+
+  console.log(activeValues.size);
+}
 
 
 // -----Answers for solved days-----
@@ -1284,3 +1426,16 @@ function followEvolvedVirus(nodes) {
 // followTheVirus(day22_infected_node);
 // console.log('Day 22, part 2:');
 // followEvolvedVirus(day22_infected_node);
+
+// console.log('Day 23, part 1:');
+// runCoprocessor(day23_instructions, {});
+// console.log('Day 23, part 2:');
+// calcOverheatingProcessorProgram(day23_instructions);
+
+// console.log('Day 24, part 1:');
+// findStrongestBridge(day24_components);
+// console.log('Day 24, part 2:');
+// findStrongestBridge(day24_components, true);
+
+// console.log('Day 25:');
+// runTuringMachine(day25_instructions);

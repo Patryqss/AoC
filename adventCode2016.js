@@ -1123,7 +1123,37 @@ function unscrambleLetters (input, operations) {
 }
 
 // Day 22
+const day22_nodes = fs.readFileSync('./2016/day22.txt', 'utf-8').split('\n');
+day22_nodes.shift();
+day22_nodes.shift(); // remove title & header
 
+function countViablePairs(nodes) {
+  const NUMBERS_REGEX = /[0-9]+/g;
+  const nodeData = nodes.map(n => {
+    const nums = n.match(NUMBERS_REGEX).map(Number);
+    return {
+      x: nums[0],
+      y: nums[1],
+      size: nums[2],
+      used: nums[3],
+      available: nums[4],
+      usedPct: nums[5],
+    }
+  });
+  let viablePairs = 0;
+
+  nodeData.forEach((node, id) => {
+    for (let i = 0; i < nodeData.length; i++) {
+      if (id !== i && node.used > 0 && nodeData[i].available >= node.used) {
+        viablePairs++;
+      }
+    }
+  });
+
+  console.log(viablePairs);
+}
+
+// Part 2 ??
 
 
 
@@ -1228,3 +1258,6 @@ function unscrambleLetters (input, operations) {
 // scrambleLetters('abcdefgh', day21_operations);
 // console.log('Day 21, part 2:');
 // unscrambleLetters('fbgdceah', day21_operations.reverse());
+
+// console.log('Day 22 part 1:');
+// countViablePairs(day22_nodes);

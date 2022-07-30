@@ -2,7 +2,7 @@ const fs = require("fs");
 const permutations = require("./permutations");
 
 // Computer created during day 5 and expanded on each other day when needed.
-// So far used in days: 2, 5, 7, 9, 11, 13, 15
+// So far used in days: 2, 5, 7, 9, 11, 13, 15, 17
 class IntCodeComputer {
   constructor(
     opcode, // number[]
@@ -34,7 +34,11 @@ class IntCodeComputer {
   }
 
   addInput(value) {
-    this.input.push(value);
+    if (Array.isArray(value)) {
+      this.input.push(...value)
+    } else {
+      this.input.push(value);
+    }
   }
 
   isInPause() {
@@ -1014,52 +1018,239 @@ function fillShipWithOxygen(shipAreaData) {
 }
 
 // Day 16
-const day16_numbers = fs.readFileSync('./2019/day16.txt', 'utf-8').split('').map(Number);
+const day16_numbers = fs.readFileSync('./2019/day16.txt', 'utf-8');
 
-function cleanFFTSignal(input, phases) {
+function cleanFFTSignal(input) {
   let currentInput = input;
-  const repeatingPattern = [0, 1, 0, -1];
 
-  for (let i = 1; i <= phases; i++) {
-    const newInput = [];
-    for (let x = 1; x <= currentInput.length; x++) {
-      const output = currentInput.reduce((acc, value, id) => acc + value * repeatingPattern[Math.floor((id + 1) / x) % repeatingPattern.length], 0);
-      const trimmedOutput = Math.abs(output) % 10;
-      newInput.push(trimmedOutput);
-    }
-    currentInput = newInput;
-  }
-  console.log(currentInput.slice(0, 8).join(''));
-}
-
-function cleanRealFFTSignal(input, phases) {
-  // The length here is too big to be kept in an array
-  let currentInput = '';
-  for (let x = 1; x <= 10000; x++) {
-    currentInput += input;
-  }
-  const repeatingPattern = [0, 1, 0, -1];
-
-  for (let i = 1; i <= phases; i++) {
+  for (let phase = 1; phase <= 100; phase++) {
     let newInput = '';
     for (let x = 1; x <= currentInput.length; x++) {
       let output = 0;
-      for (let id = 0; id < currentInput.length; id++) {
-        output += currentInput[id] * repeatingPattern[Math.floor((id + 1) / x) % repeatingPattern.length];
+      let position = -1; //cause the first one is always skipped
+      let add = true;
+      while (position < currentInput.length) {
+        position += x;
+        for (let num = 0; num < x; num++) {
+          const digit = currentInput[position + num];
+          if (!digit) break;
+          if (add) output += Number(digit);
+          else output -= Number(digit);
+        }
+        add = !add;
+        position += x;
       }
-      console.log(output, Math.abs(output) % 10)
       const trimmedOutput = Math.abs(output) % 10;
       newInput += trimmedOutput.toString();
     }
     currentInput = newInput;
-    console.log(`Phase ${i} finished`);
-    fs.writeFileSync('./2019/day16_input.txt', newInput);
   }
-  const offset = Number(input.substring(0, 7));
-  console.log(currentInput.substring(offset, offset + 8));
+  console.log(currentInput.substring(0,8));
 }
 
-cleanRealFFTSignal(day16_numbers.join(''), 100);
+/*
+Part 2 took me A LOT of time to figure out, and after many tries and reworks, the functions were still too slow to get the solution.
+I went to reddit for some leads and thanks to the user Arkoniak and his great explanation, I was finally able to solve this:
+
+```
+  Let's take final digit and apply phase procedure to it. In case of last digit (no matter the length of the initial string) will always look like 0, 0, ..., 0, 1 (lots of zero and one 1 at the last position). So phase procedure applied to last digit will always give this same digit , no matter the length of input sequence. So, we write down s'[end] = s[end]
+  Let's take second from the end. It's filter will look like 0, 0, ...., 0, 1, 1. Now, you know, that new last digit equals last digit from original input, so new value for the second digit from the end will be the following: s'[end - 1] = mod(s[end - 1] + s[end], 10) = mod(s[end-1] + s'[end], 10)
+  Next digit will have filter 0, 0, ...., 0, 1, 1, 1, so new value will be s'[end - 2] = mod(s[end - 2] + s[end - 1] + s[end], 10) = mod(s[end - 2] + s'[end - 1], 10)
+```
+*/
+
+function getOffsetFromFFTSignal(input, options = null) {
+  let currentInput = '';
+  if (!options) {
+    for (let x = 1; x <= 10000; x++) {
+      currentInput += input;
+    }
+    const offset = Number(input.substring(0, 7));
+    currentInput = currentInput.substring(offset) // I don't need any digits from the start of the string
+  } else {
+    currentInput = input; // this will be the input generated before and saved in the file
+  }
+  const staringPhase = options ? options.phase : 1;
+
+  for (let phase = staringPhase; phase <= 100; phase++) {
+    console.log('Starting from phase ' + phase);
+    let newInput = currentInput[currentInput.length - 1]; // The last digit is always the same
+    // Filling input from the end
+    for (let pos = currentInput.length - 2; pos >= 0; pos--) {
+      const newDigit = (Number(newInput[0]) + Number(currentInput[pos])) % 10;
+      newInput = `${newDigit}${newInput}`;
+    }
+    currentInput = newInput;
+    console.log('Finished phase ' + phase);
+    fs.writeFileSync('./2019/day16_input.txt', currentInput);
+    fs.writeFileSync('./2019/day16_phase.txt', (phase + 1).toString());
+  }
+
+  console.log(currentInput.substring(0,8));
+}
+
+// Day 17
+const day17_opcodes = fs.readFileSync('./2019/day17.txt', 'utf-8').split(',').map(Number);
+
+function buildCameraView(opcodes) {
+  const computer = new IntCodeComputer(opcodes, [], true);
+  computer.runComputer();
+  const output = computer.getOutput().map(code => String.fromCharCode(code));
+  const cameraView = [];
+  let robotPosition = '';
+
+  const row = [];
+  for (let i = 0; i < output.length; i++) {
+    if (output[i] !== '\n') {
+      if (output[i] === '^') robotPosition = `${row.length}x${cameraView.length}`;
+      row.push(output[i]);
+    }
+    else if (row.length > 0) {
+      cameraView.push([...row]);
+      row.splice(0);
+    }
+  }
+  return { cameraView, robotPosition };
+}
+
+function findAlignments(opcodes) {
+  const { cameraView } = buildCameraView([...opcodes]);
+  let alignmentParameters = 0;
+
+  for (let y = 1; y < cameraView.length - 1; y++) {
+    // There won't be any intersections in edge rows & cols so they can be omitted
+    for (let x = 1; x < cameraView[0].length - 1; x++) {
+      if (cameraView[y][x] === '#') {
+        if (cameraView[y][x+1] === '#' && cameraView[y][x-1] === '#' && cameraView[y+1][x] === '#' && cameraView[y-1][x] === '#') {
+          alignmentParameters += x * y;
+        }
+      }
+    }
+  }
+  console.log(alignmentParameters);
+}
+
+function getAWayOut(cameraView, startPosition, startDirection) {
+  const currentPosition = startPosition.split('x').map(Number);
+  let robotDir = startDirection;
+  const wayOut = [];
+  let canMove = true;
+  let shouldTurn = true;
+
+  while (canMove) {
+    if (shouldTurn) {
+      if (robotDir === 'U') {
+        if (currentPosition[0] > 0 && cameraView[currentPosition[1]][currentPosition[0] - 1] === '#') {
+          robotDir = 'L';
+          wayOut.push('L');
+        } else if (currentPosition[0] < cameraView[0].length - 1 && cameraView[currentPosition[1]][currentPosition[0] + 1] === '#') {
+          robotDir = 'R';
+          wayOut.push('R');
+        } else {
+          canMove = false;
+        }
+      } else if (robotDir === 'D') {
+        if (currentPosition[0] > 0 && cameraView[currentPosition[1]][currentPosition[0] - 1] === '#') {
+          robotDir = 'L';
+          wayOut.push('R');
+        } else if (currentPosition[0] < cameraView[0].length - 1 && cameraView[currentPosition[1]][currentPosition[0] + 1] === '#') {
+          robotDir = 'R';
+          wayOut.push('L');
+        } else {
+          canMove = false;
+        }
+      } else if (robotDir === 'R') {
+        if (currentPosition[1] > 0 && cameraView[currentPosition[1] - 1][currentPosition[0]] === '#') {
+          robotDir = 'U';
+          wayOut.push('L');
+        } else if (currentPosition[1] < cameraView.length - 1 && cameraView[currentPosition[1] + 1][currentPosition[0]] === '#') {
+          robotDir = 'D';
+          wayOut.push('R');
+        } else {
+          canMove = false;
+        }
+      } else {
+        if (currentPosition[1] > 0 && cameraView[currentPosition[1] - 1][currentPosition[0]] === '#') {
+          robotDir = 'U';
+          wayOut.push('R');
+        } else if (currentPosition[1] < cameraView.length - 1 && cameraView[currentPosition[1] + 1][currentPosition[0]] === '#') {
+          robotDir = 'D';
+          wayOut.push('L');
+        } else {
+          canMove = false;
+        }
+      }
+      shouldTurn = false;
+      if (canMove) wayOut.push(0);
+    } else {
+      if (robotDir === 'U') {
+        wayOut[wayOut.length - 1]++;
+        currentPosition[1]--;
+        if (currentPosition[1] === 0 || cameraView[currentPosition[1] - 1][currentPosition[0]] !== '#') {
+          shouldTurn = true;
+        }
+      } else if (robotDir === 'D') {
+        wayOut[wayOut.length - 1]++;
+        currentPosition[1]++;
+        if (currentPosition[1] === cameraView.length - 1 || cameraView[currentPosition[1] + 1][currentPosition[0]] !== '#') {
+          shouldTurn = true;
+        }
+      } else if (robotDir === 'R') {
+        wayOut[wayOut.length - 1]++;
+        currentPosition[0]++;
+        if (currentPosition[0] === cameraView[0].length - 1 || cameraView[currentPosition[1]][currentPosition[0] + 1] !== '#') {
+          shouldTurn = true;
+        }
+      } else {
+        wayOut[wayOut.length - 1]++;
+        currentPosition[0]--;
+        if (currentPosition[0] === 0 || cameraView[currentPosition[1]][currentPosition[0] - 1] !== '#') {
+          shouldTurn = true;
+        }
+      }
+    }
+  }
+  return wayOut.join(',');
+}
+
+function navigateRobotOnScafflod(opcodes) {
+  const { cameraView, robotPosition } = buildCameraView([...opcodes]);
+  const wayOut = getAWayOut(cameraView, robotPosition, 'U');
+  // Result for my opcodes:
+  // L,10,R,8,R,6,R,10,L,12,R,8,L,12,L,10,R,8,R,6,R,10,L,12,R,8,L,12,L,10,R,8,R,8,L,10,R,8,R,8,L,12,R,8,L,12,L,10,R,8,R,6,R,10,L,10,R,8,R,8,L,10,R,8,R,6,R,10
+  // Was going to write a function to search for the pattern but I saw it almost immediately so I'm going to do it manully to not waste the time to write it xD
+
+  const A = 'L,10,R,8,R,6,R,10';
+  const B = 'L,12,R,8,L,12';
+  const C = 'L,10,R,8,R,8';
+  let compiledWayOut = wayOut.replaceAll(A, 'A').replaceAll(B, 'B').replaceAll(C, 'C');
+  compiledWayOut = compiledWayOut.split('').map(char => char.charCodeAt());
+  compiledWayOut.push(10);
+
+  const compiledA = A.split('').map(char => char.charCodeAt());
+  compiledA.push(10);
+  const compiledB = B.split('').map(char => char.charCodeAt());
+  compiledB.push(10);
+  const compiledC = C.split('').map(char => char.charCodeAt());
+  compiledC.push(10);
+
+  opcodes[0] = 2;
+  const computer = new IntCodeComputer(opcodes, []);
+
+  computer.addInput(compiledWayOut);
+  computer.addInput(compiledA);
+  computer.addInput(compiledB);
+  computer.addInput(compiledC);
+  computer.addInput('y'.charCodeAt());
+  computer.addInput(10);
+
+  computer.runComputer();
+
+  console.log(computer.getOutput())
+}
+
+// Day 18
+
 
 
 
@@ -1140,4 +1331,17 @@ cleanRealFFTSignal(day16_numbers.join(''), 100);
 // fillShipWithOxygen(shipAreaData);
 
 // console.log('Day 16, part 1:');
-// cleanFFTSignal(day16_numbers, 100);
+// cleanFFTSignal(day16_numbers);
+// console.log('Day 16, part 2 (even after all those speed ups, this will still take 2-3 hours to complete):');
+// getOffsetFromFFTSignal(day16_numbers);
+// For immediate answer, run the 3 lines below:
+/*
+const phaseXInput = fs.readFileSync('./2019/day16_input.txt', 'utf-8');
+const finishedPhases = Number(fs.readFileSync('./2019/day16_phase.txt', 'utf-8'));
+getOffsetFromFFTSignal(phaseXInput, { phase: finishedPhases });
+*/
+
+// console.log('Day 17, part 1:');
+// findAlignments(day17_opcodes);
+// console.log('Day 17, part 2:');
+// navigateRobotOnScafflod(day17_opcodes);
