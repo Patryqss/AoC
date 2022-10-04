@@ -1114,7 +1114,7 @@ day16_samples = day16_samples.split('\n\n');
 day16_opcodes = day16_opcodes.split('\n');
 
 class RegisterProgram {
-  // Used in Day 16 & Day 19
+  // Used in Days: 16, 19 & 21
   constructor(instruction, input, expectedOutput) {
     this.instruction = instruction;
     this.input = input;
@@ -1867,6 +1867,294 @@ function resolveParenthesis(content, position, routes) {
 }
 
 // Day 21
+const day21_instructions = fs.readFileSync('./2018/day21.txt', 'utf-8').split('\n');
+
+// The task was to figure out how the program works and see what number depends on changing register 0.
+// Turned out that I have to wait for the instruction 'eqrr 5 0 3' and check what's inside last register.
+// At first, I used the same function as in Day 19 with a few modifications, but turned out that it runs for a very long time before getting the answer, so I didn't use it in the end but left it here cause why not.
+function findHaltingRegisters_TooLong(instructions) {
+  const answers = [];
+  let repeats;
+  const NUMBER_REGEX = /[0-9]+/g;
+
+  let ip = instructions.shift();
+  ip = Number(ip.match(NUMBER_REGEX)[0]);
+  const pointerIndex = ip;
+  ip = 0;
+  const register = new RegisterProgram(null, [ 0, 0, 0, 0, 0, 0 ], null);
+
+  let output;
+  while (!repeats) {
+    const inst = instructions[ip].match(NUMBER_REGEX).map(Number);
+    inst.unshift(0);
+    const operation = instructions[ip].substring(0, 4);
+    register.setInstruction(inst);
+    output = register.runOpByName(operation);
+    if (instructions[ip] === 'eqrr 5 0 3') {
+      const ans = output[5];
+      if (answers.length === 0) {
+        console.log('Part 1:');
+        console.log(ans);
+      }
+      if (answers.includes(ans)) {
+        const repeatAt = answers.indexOf(ans);
+        repeats = answers.slice(repeatAt);
+        break;
+      }
+      answers.push(ans);
+    }
+    register.setInput(output);
+    ip = register.updateInstructionPointer(pointerIndex);
+  }
+
+  console.log(repeats[repeats.length - 1]);
+}
+
+// This function was created by reverse-engineering the original register program from my input. It executes things much much faster but won't work with any other input.
+function findHaltingRegisters() {
+  const answers = [];
+  let repeats;
+
+  let registerD = 65536;
+  let registerE = 12249547;
+  registerD = Math.floor(registerD / 256);
+
+  while (!repeats) {
+    let registerC = registerD & 255;
+    registerE += registerC;
+    registerE = ((registerE & 16777215) * 65899) & 16777215;
+    if (256 > registerD) {
+      if (answers.length === 0) {
+        console.log(registerE);
+      }
+
+      if (answers.includes(registerE)) {
+        const repeatAt = answers.indexOf(registerE);
+        repeats = answers.slice(repeatAt);
+        repeatPatternFound = true;
+      }
+
+      answers.push(registerE)
+      registerD = registerE | 65536;
+      registerE = 13431073;
+    } else {
+      registerD = Math.floor(registerD / 256)
+    }
+  }
+
+  console.log(repeats[repeats.length - 1]);
+}
+
+// Day 22
+const day22_caveData = fs.readFileSync('./2018/day22.txt', 'utf-8');
+
+function calculateRiskLevelInCave(caveData, addXToCave = 0, addYToCave = 0) {
+  const [depth, targetX, targetY] = caveData.match(/[0-9]+/g).map(Number);
+  const cave = Array(targetY + 1 + addYToCave).fill(0).map(() => Array(targetX + 1 + addXToCave).fill(0));
+  const caveWithRisk = Array(targetY + 1 + addYToCave).fill(0).map(() => Array(targetX + 1 + addXToCave).fill(0));
+  let totalRisk = 0;
+
+  for (let y = 0; y <= targetY + addYToCave; y++) {
+    for (let x = 0; x <= targetX + addXToCave; x++) {
+      let geologicIndex;
+      if ((x === 0 && y === 0) || (x === targetX && y === targetY)) {
+        geologicIndex = 0;
+      } else if (y === 0) {
+        geologicIndex = x * 16807;
+      } else if (x === 0) {
+        geologicIndex = y * 48271;
+      } else {
+        geologicIndex = cave[y-1][x] * cave[y][x-1];
+      }
+
+      const erosionLevel = ((geologicIndex + depth) % 20183);
+      cave[y][x] = erosionLevel;
+      caveWithRisk[y][x] = erosionLevel % 3;
+      totalRisk += erosionLevel % 3;
+    }
+  }
+
+  if (addXToCave || addYToCave) return caveWithRisk;
+  console.log(totalRisk);
+}
+
+function findFastestWayInCave(caveData) {
+  const [depth, targetX, targetY] = caveData.match(/[0-9]+/g).map(Number);
+  const expandCave = 50; // a way may lead outside primary rectangle
+  const cave = calculateRiskLevelInCave(caveData, (targetX+expandCave - targetX%expandCave) - targetX, (targetY+expandCave - targetY%expandCave) - targetY);
+  const neededTools = {
+    0: ['climb', 'torch'],
+    1: ['climb', 'nothing'],
+    2: ['torch', 'nothing'],
+  }
+  const recordPlaces = {};
+
+  let fastestWay;
+  let currentTime = 0;
+  const goal = `${targetX}x${targetY}`;
+  const queue = { 0: [{
+    position: '0x0',
+    tool: 'torch',
+  }]}; // time: data
+
+  const clearQueue = () => {
+    queue[currentTime].shift();
+    if (queue[currentTime].length === 0) {
+      delete queue[currentTime];
+      currentTime++;
+    }
+  }
+
+  // BFS
+  while (!fastestWay || fastestWay + 7 > currentTime) {
+    while (!queue[currentTime]) {
+      currentTime++;
+    }
+    const { position, tool } = queue[currentTime][0];
+    if (position === goal) {
+      let timeSpent = currentTime;
+      if (tool !== 'torch') timeSpent += 7;
+      if (!fastestWay || fastestWay > timeSpent) {
+        fastestWay = timeSpent
+      }
+      clearQueue();
+      continue;
+    }
+
+    const placeMark = `${position}x${tool}`;
+    if (recordPlaces[placeMark] && recordPlaces[placeMark] <= currentTime) {
+      clearQueue(); // There was a faster way here and already is somewhere in queue
+      continue;
+    } else {
+      recordPlaces[placeMark] = currentTime;
+    }
+
+    const possibleLocations = {};
+    const [x, y] = position.split('x').map(Number);
+    if (y > 0) possibleLocations[`${x}x${y - 1}`] = cave[y-1][x];
+    if (y < cave.length - 1) possibleLocations[`${x}x${y + 1}`] = cave[y+1][x];
+    if (x > 0) possibleLocations[`${x - 1}x${y}`] = cave[y][x-1];
+    if (x < cave[0].length - 1) possibleLocations[`${x + 1}x${y}`] = cave[y][x+1];
+
+    Object.entries(possibleLocations).forEach(([loc, structure]) => {
+      if (neededTools[structure].includes(tool)) {
+        const newLocObj = { position: loc, tool };
+        if (!queue[currentTime + 1]) {
+          queue[currentTime + 1] = [newLocObj];
+        } else {
+          queue[currentTime + 1].push(newLocObj);
+        }
+      } else {
+        const possibleTools = neededTools[structure];
+        possibleTools.forEach(newTool => {
+          const currentStructure = cave[y][x];
+          if (!neededTools[currentStructure].includes(newTool)) return;
+
+          const newLocObj = { position: loc, tool: newTool };
+          if (!queue[currentTime + 8]) {
+            queue[currentTime + 8] = [newLocObj];
+          } else {
+            queue[currentTime + 8].push(newLocObj);
+          }
+        })
+      }
+    });
+    clearQueue();
+  }
+  console.log(fastestWay);
+}
+
+// Day 23
+const day23_nanobots = fs.readFileSync('./2018/day23.txt', 'utf-8').split('\n');
+
+function countBotsInRadius(nanobot, neighbours) {
+  const [x, y, z, r] = nanobot.match(/-?[0-9]+/g).map(Number);
+  let inRange = 0;
+  neighbours.forEach(n => {
+    const [nx, ny, nz, nr] = n.match(/-?[0-9]+/g).map(Number);
+    const distance = Math.abs(x - nx) + Math.abs(y - ny) + Math.abs(z - nz);
+    if (distance <= r) inRange++;
+  })
+  return inRange;
+}
+
+function findStrongestNanobotRange(nanobots) {
+  let strongestBot = 0;
+  let strongestBotData;
+
+  nanobots.forEach(bot => {
+    const data = bot.match(/-?[0-9]+/g).map(Number);
+    if (data[3] > strongestBot) {
+      strongestBot = data[3];
+      strongestBotData = bot;
+    }
+  })
+  console.log(countBotsInRadius(strongestBotData, nanobots));
+}
+
+function countBotsInRange(location, bots) {
+  const [x, y, z] = location.match(/-?[0-9]+/g).map(Number);
+  let inRange = 0;
+  bots.forEach(n => {
+    const [nx, ny, nz, nr] = n.match(/-?[0-9]+/g).map(Number);
+    const distance = Math.abs(x - nx) + Math.abs(y - ny) + Math.abs(z - nz);
+    if (distance <= nr) inRange++;
+  })
+  return inRange;
+}
+
+function findBestLocationForTeleport(nanobots) {
+  let biggestRange = 0;
+  let bestLocation;
+  nanobots.forEach(bot => {
+    // First, find the bot that is detected by the most amount of other bots (reverse of part 1)
+    // This should approximately show the best area to look
+    const botRange = countBotsInRange(bot, nanobots);
+    if (botRange > biggestRange) {
+      biggestRange = botRange;
+      bestLocation = bot;
+    }
+  });
+
+  const checkArea = 50 // How much to go in each dimension to check for even beter location
+  let [x, y, z] = bestLocation.match(/-?[0-9]+/g).map(Number);
+  let smallestDistance = x + y + z;
+
+  for (let a = x - checkArea; a <= x + checkArea; a++) {
+    for (let b = y - checkArea; b <= y + checkArea; b++) {
+      for (let c = z - checkArea; c <= z + checkArea; c++) {
+        const range = countBotsInRange(`${a},${b},${c}`, nanobots);
+        if (range > biggestRange) {
+          biggestRange = range;
+          bestLocation = `${a},${b},${c}`;
+        } if (range === biggestRange) {
+          const dist = a + b + c;
+          if (dist < smallestDistance) {
+            bestLocation = `${a},${b},${c}`;
+            smallestDistance = dist;
+          }
+        }
+      }
+    }
+  }
+
+  console.log(biggestRange);
+  console.log(bestLocation);
+  const [bestX, bestY, bestZ] = bestLocation.match(/[0-9]+/g).map(Number);
+  console.log(bestX + bestY + bestZ);
+}
+
+const test = `pos=<10,12,12>, r=2
+pos=<12,14,12>, r=2
+pos=<16,12,12>, r=4
+pos=<14,14,14>, r=6
+pos=<50,50,50>, r=200
+pos=<10,10,10>, r=5`.split('\n');
+
+// Not finished yet. Takes too long :(((
+findBestLocationForTeleport(day23_nanobots)
+
+
 
 
 
@@ -1963,3 +2251,14 @@ function resolveParenthesis(content, position, routes) {
 
 // console.log('Day 20, part 1 & 2 (this will take a while):')
 // getRoomsAndDoorsFromRegex(day20_regex);
+
+// console.log('Day 21, part 1 & 2:');
+// findHaltingRegisters();
+
+// console.log('Day 22, part 1:');
+// calculateRiskLevelInCave(day22_caveData);
+// console.log('Day 22, part 2:');
+// findFastestWayInCave(day22_caveData);
+
+// console.log('Day 23, part 1:');
+// findStrongestNanobotRange(day23_nanobots);

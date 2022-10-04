@@ -2,7 +2,7 @@ const fs = require("fs");
 const permutations = require("./permutations");
 
 // Computer created during day 5 and expanded on each other day when needed.
-// So far used in days: 2, 5, 7, 9, 11, 13, 15, 17
+// So far used in days: 2, 5, 7, 9, 11, 13, 15, 17, 19
 class IntCodeComputer {
   constructor(
     opcode, // number[]
@@ -1250,7 +1250,396 @@ function navigateRobotOnScafflod(opcodes) {
 }
 
 // Day 18
+const day18_map = fs.readFileSync('./2019/day18.txt', 'utf-8').split('\n').map(row => row.split(''));
 
+function findReachableKeys(map, obtainedKeys) {
+  const lettersLocations = {};
+  const route = new Graph();
+  let currentPosition;
+
+  const assignRouteCost = (point, coords) => {
+    if (point === '.' || point === '@' || !isNaN(point)) return 1; // floor or start
+    else {
+      // key or door
+      const isKey = point === point.toLowerCase();
+      if (isKey) {
+        lettersLocations[point] = coords;
+        return 10 ** 5;
+      } else {
+        if (!obtainedKeys.includes(point.toLowerCase())) return 10 ** 6; // Can't go through this door
+        else return 1; // Can be easily opened
+      }
+    }
+  }
+
+  for (let y = 0; y < map.length; y++) {
+    for (let x = 0; x < map[0].length; x++) {
+      if (map[y][x] === '#') continue;
+      const from = `${x},${y}`;
+      const to = new Map();
+
+      if (map[y][x] === '@') currentPosition = from;
+      if (map[y-1] && map[y-1][x] !== '#') to.set(`${x},${y-1}`, assignRouteCost(map[y-1][x], `${x},${y-1}`));
+      if (map[y][x-1] && map[y][x-1] !== '#') to.set(`${x-1},${y}`, assignRouteCost(map[y][x-1], `${x-1},${y}`));
+      if (map[y][x+1] && map[y][x+1] !== '#') to.set(`${x+1},${y}`, assignRouteCost(map[y][x+1], `${x+1},${y}`));
+      if (map[y+1] && map[y+1][x] !== '#') to.set(`${x},${y+1}`, assignRouteCost(map[y+1][x], `${x},${y+1}`));
+
+      route.addNode(from, to);
+    }
+  }
+  const reachableLocations = {};
+  const isThereAKey = Object.entries(lettersLocations).length > 0;
+
+  Object.entries(lettersLocations).forEach(([letter, loc]) => {
+    const pathToKey = route.path(currentPosition, loc, { cost: true });
+    if (pathToKey.path && pathToKey.cost < 2 * (10 ** 5)) reachableLocations[letter] = { distance: pathToKey.cost - 10 ** 5 + 1, position: loc };
+  });
+
+  return { currentPosition, reachableLocations, isThereAKey }
+}
+
+function collectAllKeys(map, useRobots = false) {
+  if (useRobots) {
+    // For part 2
+    let entranceFound = false;
+    for (let y = 0; y < map.length; y++) {
+      if (entranceFound) break;
+      for (let x = 0; x < map[0].length; x++) {
+        if (map[y][x] === '@') {
+          map[y-1][x-1] = '1';
+          map[y-1][x+1] = '2';
+          map[y+1][x-1] = '3';
+          map[y+1][x+1] = '4';
+
+          map[y][x] = '#';
+          map[y-1][x] = '#';
+          map[y+1][x] = '#';
+          map[y][x-1] = '#';
+          map[y][x+1] = '#';
+          entranceFound = true;
+          break;
+        }
+      }
+    }
+  }
+
+  let fewestSteps;
+  let currentStep = 0;
+  let thisStepAverageKeys;
+
+  const queue = { 0: [{
+    currentMap: map,
+    obtainedKeys: [],
+  }]}
+
+  const clearQueue = () => {
+    queue[currentStep].shift();
+    if (queue[currentStep].length === 0) {
+      delete queue[currentStep];
+      currentStep++;
+
+      if (queue[currentStep]) {
+        const sumOfKeys = queue[currentStep].reduce((a, b) => a + b.obtainedKeys.length, 0);
+        thisStepAverageKeys = sumOfKeys / queue[currentStep].length;
+      } else {
+        thisStepAverageKeys = undefined;
+      }
+    }
+  }
+  const moveToReachableKeys = (currentMap, obtainedKeys, positionMark = '@') => {
+    const data = findReachableKeys(currentMap, obtainedKeys);
+    if (!data.isThereAKey) {
+      fewestSteps = currentStep;
+      return;
+    }
+    const position = data.currentPosition.split(',').map(Number);
+
+    Object.entries(data.reachableLocations).forEach(([letter, letterData]) => {
+      const lPosition = letterData.position.split(',').map(Number);
+
+      const newMap = JSON.parse(JSON.stringify(currentMap)); //deep copy of array of arrays
+      newMap[position[1]][position[0]] = '.';
+      newMap[lPosition[1]][lPosition[0]] = positionMark;
+
+      const newKeys = [...obtainedKeys, letter];
+
+      const newDataObj = {
+        currentMap: newMap,
+        obtainedKeys: newKeys,
+      }
+
+      const stepsAfterMove = currentStep + letterData.distance;
+      if (!queue[stepsAfterMove]) {
+        queue[stepsAfterMove] = [newDataObj]
+      } else {
+        queue[stepsAfterMove].push(newDataObj);
+      }
+    })
+  }
+  const savedMaps = new Set();
+
+  // BFS
+  while(!fewestSteps) {
+    while (!queue[currentStep]) {
+      currentStep++;
+    }
+    const { currentMap, obtainedKeys } = queue[currentStep][0];
+    if (savedMaps.has(JSON.stringify([currentMap, [...obtainedKeys].sort()]))) {
+      clearQueue(); // There was a faster way here and already is somewhere in queue
+      continue;
+    }
+    savedMaps.add(JSON.stringify([currentMap, [...obtainedKeys].sort()]));
+
+    if (!useRobots && thisStepAverageKeys && thisStepAverageKeys > obtainedKeys.length) {
+      // Usually at this point there're more keys, so we can assume that this way is inefficient. Not really safe, but saves A LOT of time in part 1. Does not work well in part 2, so it's omitted there.
+      clearQueue();
+      continue;
+    }
+
+    if (!useRobots) {
+      moveToReachableKeys(currentMap, obtainedKeys);
+    } else {
+      for (let robot = 1; robot <= 4; robot++) {
+        const robotMap = JSON.parse(JSON.stringify(currentMap).replace(robot.toString(), '@'));
+        moveToReachableKeys(robotMap, obtainedKeys, robot.toString());
+      }
+    }
+
+    clearQueue();
+  }
+
+  console.log(fewestSteps);
+}
+
+// Day 19
+const day19_opcodes = fs.readFileSync('./2019/day19.txt', 'utf-8').split(',').map(Number);
+
+function scanTractorBeamArea(opcodes) {
+  let affectedPoints = 0;
+
+  for (let y = 0; y < 50; y++) {
+    for (let x = 0; x < 50; x++) {
+      const computer = new IntCodeComputer([...opcodes], [x, y]);
+      computer.runComputer();
+      if (computer.getOutput() === 1) {
+        affectedPoints++;
+      }
+    }
+  }
+
+  console.log(affectedPoints);
+}
+
+function fitSantaInBeam(opcodes) {
+  let currentXStreak = 0;
+  let possiblePoints = []; // will be filled with [x, y] arrays
+  let lastPositiveFrom = 0;
+  let pointFound = null;
+  const santaSize = 100;
+
+  for (let y = 25; y < Infinity; y++) {
+    if (pointFound) break;
+    currentXStreak = 0;
+    for (let x = lastPositiveFrom; x < Infinity; x++) {
+      const computer = new IntCodeComputer([...opcodes], [x, y]);
+      computer.runComputer();
+      const output = computer.getOutput();
+
+      if (output === 1) {
+        if (currentXStreak === 0) {
+          lastPositiveFrom = x;
+          if (possiblePoints[0] && possiblePoints[0][1] + santaSize - 1 === y) {
+            pointFound = possiblePoints[0][0] * 10000 + possiblePoints[0][1];
+            break;
+          }
+        }
+        currentXStreak++;
+      } else {
+        if (currentXStreak === 0) {
+          while (possiblePoints[0] && possiblePoints[0][0] === x) {
+            possiblePoints.shift()
+          }
+        } else if (currentXStreak >= santaSize) {
+          possiblePoints.push([x - santaSize, y]);
+          break;
+        } else {
+          // < santaSize && > 0, so there were ones, but turned into zeros too soon
+          break;
+        }
+      }
+    }
+  }
+
+  console.log(pointFound);
+}
+
+// Day 20
+const day20_maze = fs.readFileSync('./2019/day20.txt', 'utf-8').split('\n').map(row => row.split(''));
+
+function findExitInMaze(maze) {
+  const exitPoints = [2, 26, 80, 104];
+  const portals = {};
+  let start, end;
+
+  const addPortal = (portalName, location) => {
+    if (!portalName.includes('.') && !portalName.includes('#')) {
+      if (portalName === 'AA') {
+        start = location;
+      } else if (portalName === 'ZZ') {
+        end = location;
+      } else {
+        portals[location] = portalName;
+      }
+    }
+  }
+
+  exitPoints.forEach(y => {
+    for (x = 2; x <= 104; x++ ) {
+      if (maze[y][x] === '.') {
+        let portalName = '';
+        if (y === 2 || y === 80) {
+          portalName += maze[y-2][x];
+          portalName += maze[y-1][x];
+        } else {
+          portalName += maze[y+1][x];
+          portalName += maze[y+2][x];
+        }
+        addPortal(portalName, `${x},${y}`);
+      }
+    }
+  });
+  exitPoints.forEach(x => {
+    for (y = 2; y <= 104; y++ ) {
+      if (maze[y][x] === '.') {
+        let portalName = '';
+        if (x === 2 || x === 80) {
+          portalName += maze[y][x-2];
+          portalName += maze[y][x-1];
+        } else {
+          portalName += maze[y][x+1];
+          portalName += maze[y][x+2];
+        }
+        addPortal(portalName, `${x},${y}`);
+      }
+    }
+  });
+
+  const route = new Graph();
+  const routeDepth0 = new Graph();
+  for (y = 2; y <= 104; y++) {
+    for (x = 2; x <= 104; x++ ) {
+      if (maze[y][x] === '.') {
+        const from = `${x},${y}`;
+        const to = new Map();
+        if (maze[y-1][x] === '.') to.set(`${x},${y-1}`, 1);
+        if (maze[y+1][x] === '.') to.set(`${x},${y+1}`, 1);
+        if (maze[y][x-1] === '.') to.set(`${x-1},${y}`, 1);
+        if (maze[y][x+1] === '.') to.set(`${x+1},${y}`, 1);
+        const to0 = new Map(to);
+        if (Object.keys(portals).includes(from)) {
+          const portalName = portals[from];
+          const matchingPortal = Object.entries(portals).find(([loc, pName]) => pName === portalName && loc !== from)
+          to.set(matchingPortal[0], 1);
+          if (x !== 2 && x !== 104 && y !== 2 && y !== 104) {
+            to0.set(matchingPortal[0], 1);
+          }
+        }
+        route.addNode(from, to);
+        routeDepth0.addNode(from, to0);
+      }
+    }
+  }
+
+  console.log('Part 1:')
+  console.log(route.path(start, end, { cost: true }).cost);
+
+  let currentStep = 0;
+  let fewestSteps;
+  const queue = { 0: [{
+    location: start,
+    depth: 0
+  }]};
+  const savedSettings = new Set();
+
+  const clearQueue = () => {
+    queue[currentStep].shift();
+    if (queue[currentStep].length === 0) {
+      delete queue[currentStep];
+      currentStep++;
+    }
+  }
+  const checkDepthOfPath = (path) => {
+    let depthChange = 0;
+    let depthChangeCount = 0;
+    for (x = 1; x < path.length; x++) {
+      const thisCoords = path[x].match(/[0-9]+/g).map(Number);
+      const prevCoords = path[x-1].match(/[0-9]+/g).map(Number);
+
+      if (Math.abs(thisCoords[0] - prevCoords[0]) > 1 || Math.abs(thisCoords[1] - prevCoords[1]) > 1) {
+        // path goes into portal, now check if its outer or inner
+        if (path[x-1].includes('26') || path[x-1].includes('80')) {
+          depthChange++;
+        } else {
+          depthChange--;
+        }
+        depthChangeCount++;
+      }
+    }
+    return { depthChange, depthChangeCount }
+  }
+  // BFS
+  while(!fewestSteps) {
+    while (!queue[currentStep]) {
+      currentStep++;
+    }
+    const { location, depth } = queue[currentStep][0];
+    if (savedSettings.has(JSON.stringify([location, depth]))) {
+      clearQueue(); // There was a faster way here and already is somewhere in queue.
+      continue;
+    }
+    if (depth > 30) {
+      clearQueue(); // We can suppose that the right answer won't go that deep. Can be adjusted if needed.
+      continue;
+    }
+    savedSettings.add(JSON.stringify([location, depth]));
+
+    if (depth === 0) {
+      const path = routeDepth0.path(location, end, { cost: true });
+      if (path.cost > 0) {
+        const pathData = checkDepthOfPath(path.path);
+        if (pathData.depthChangeCount === 0) {
+          fewestSteps = currentStep + path.cost;
+          break;
+        }
+      }
+    }
+
+    Object.keys(portals).forEach(portal => {
+      let path;
+      if (depth === 0) path = routeDepth0.path(location, portal, { cost: true });
+      else path = route.path(location, portal, { cost: true });
+      if (path.path && path.cost > 1) {
+        const pathData = checkDepthOfPath(path.path);
+        if (pathData.depthChangeCount <= 1) {
+          // The safest way is to move only by one depth on one step
+          const stepsAfterMove = currentStep + path.cost;
+          if (!queue[stepsAfterMove]) {
+            queue[stepsAfterMove] = [{ location: portal, depth: depth + pathData.depthChange }];
+          } else {
+            queue[stepsAfterMove].push({ location: portal, depth: depth + pathData.depthChange });
+          }
+        }
+      }
+    });
+
+    clearQueue();
+  }
+
+  console.log('Part 2:');
+  console.log(fewestSteps);
+}
+
+// Day 21
 
 
 
@@ -1345,3 +1734,16 @@ getOffsetFromFFTSignal(phaseXInput, { phase: finishedPhases });
 // findAlignments(day17_opcodes);
 // console.log('Day 17, part 2:');
 // navigateRobotOnScafflod(day17_opcodes);
+
+// console.log('Day 18, part 1 (this will take 3-5 minutes):');
+// collectAllKeys(day18_map);
+// console.log('Day 18, part 2 (this will take 4-6 minutes):');
+// collectAllKeys(day18_map, true);
+
+// console.log('Day 19, part 1:');
+// scanTractorBeamArea(day19_opcodes);
+// console.log('Day 19, part 2 (this will take a few seconds):');
+// fitSantaInBeam(day19_opcodes);
+
+// console.log('Day 20 (this will take 2-3 minutes):');
+// findExitInMaze(day20_maze);

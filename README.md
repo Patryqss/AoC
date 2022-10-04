@@ -5,11 +5,11 @@ This repository contains my solutions to puzzles available on https://adventofco
 ```
 [2021] 36*
 [2020] 38*
-[2019] 34*
-[2018] 40*
+[2019] 40*
+[2018] 45*
 [2017] 50*
 [2016] 43*
-[2015] 42*
+[2015] 50*
 
-Total stars: 283*/350*
+Total stars: 302*/350*
 ```

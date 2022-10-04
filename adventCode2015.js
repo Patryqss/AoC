@@ -1042,6 +1042,240 @@ function getBestAndWorstEquipment(stats) {
 }
 
 // Day 22
+const day22_stats = fs.readFileSync('./2015/day22.txt', 'utf-8');
+
+function simulateMagicBattle(stats, hardMode = false) {
+  const bossStats = stats.match(/[0-9]+/g).map(Number);
+  let manaSpent = 0;
+  let leastManaUsed;
+
+  const spells = [
+    {
+      name: 'Magic Missile',
+      cost: 53,
+      effect: { turns: 1, dmg: 4 },
+    },
+    {
+      name: 'Drain',
+      cost: 73,
+      effect: { turns: 1, dmg: 2, heal: 2 },
+    },
+    {
+      name: 'Shield',
+      cost: 113,
+      effect: { turns: 6, armor: 7 },
+    },
+    {
+      name: 'Poison',
+      cost: 173,
+      effect: { turns: 6, dmg: 3 },
+    },
+    {
+      name: 'Recharge',
+      cost: 229,
+      effect: { turns: 5, charge: 101 },
+    },
+  ];
+
+  const queue = { 0: [{
+    boss: { hp: bossStats[0], dmg: bossStats[1] },
+    player: { hp: 50, mp: 500, armor: 0 },
+    effects: [],
+    usedSpells: [], //Just for an information, not needed in the task; can be logged after win
+  }]};
+
+  const clearQueue = () => {
+    queue[manaSpent].shift();
+    if (queue[manaSpent].length === 0) {
+      delete queue[manaSpent];
+      manaSpent++;
+    }
+  }
+
+  const activateEffects = (boss, player, effects) => {
+    let hadShield = false;
+    effects.forEach(effect => {
+      effect.turns--;
+      if (effect.dmg) boss.hp -= effect.dmg;
+      if (effect.heal) player.hp += effect.heal;
+      if (effect.charge) player.mp += effect.charge;
+      if (effect.armor) {
+        hadShield = true;
+        player.armor = effect.armor;
+      }
+    });
+    if (!hadShield) player.armor = 0;
+
+    return effects.filter(e => e.turns > 0);
+  }
+
+  // BFS
+  while (!leastManaUsed || manaSpent + 53 < leastManaUsed) {
+    while (!queue[manaSpent]) {
+      manaSpent++;
+    }
+
+    let { boss, player, effects, usedSpells } = queue[manaSpent][0];
+    if (hardMode) {
+      player.hp -= 1;
+      if (player.hp <= 0) {
+        clearQueue();
+        continue;
+      }
+    }
+
+    if (effects.length > 0) {
+      effects = activateEffects(boss, player, effects);
+    }
+
+    if (boss.hp <= 0) {
+      if (!leastManaUsed) leastManaUsed = manaSpent;
+      else leastManaUsed = Math.min(leastManaUsed, manaSpent);
+      clearQueue(); // Boss is dead
+      continue;
+    }
+
+    // Player turn
+    if (player.mp < 53) {
+      clearQueue(); // Not able to cast any spell
+      continue;
+    }
+
+    spells.forEach(spell => {
+      const activeSpellsNames = effects.map(e => e.name);
+      if (spell.cost > player.mp || activeSpellsNames.includes(spell.name)) {
+        return;
+      }
+
+      const currentPlayer = {...player, mp: player.mp - spell.cost};
+      const currentBoss = {...boss};
+      let currentEffects = [...JSON.parse(JSON.stringify(effects)), {...spell.effect, name: spell.name}];
+      const currentUsedSpells = [...usedSpells, spell.name];
+      const spentAfterSpell = manaSpent + spell.cost;
+
+      currentEffects = activateEffects(currentBoss, currentPlayer, currentEffects);
+      if (currentBoss.hp <= 0) {
+        if (!leastManaUsed) leastManaUsed = spentAfterSpell;
+        else leastManaUsed = Math.min(leastManaUsed, spentAfterSpell);
+        return;
+      }
+
+      // Boss turn
+      currentPlayer.hp -= Math.max(currentBoss.dmg - currentPlayer.armor, 1);
+      if (currentPlayer.hp <= 0) {
+        return;
+      }
+
+      if (!queue[spentAfterSpell]) {
+        queue[spentAfterSpell] = [{ player: currentPlayer, boss: currentBoss, effects: currentEffects, usedSpells: currentUsedSpells }];
+      } else {
+        queue[spentAfterSpell].push({ player: currentPlayer, boss: currentBoss, effects: currentEffects, usedSpells: currentUsedSpells });
+      }
+    })
+
+    clearQueue();
+  }
+
+  console.log(leastManaUsed);
+}
+
+// Day 23
+const day23_instructions = fs.readFileSync('./2015/day23.txt', 'utf-8').split('\n');
+
+function operateRegisters(instructions, aValue) {
+  const registers = { a: aValue, b: 0 };
+  let pointer = 0;
+
+  while (pointer >= 0 && pointer < instructions.length) {
+    const instruction = instructions[pointer];
+    const commands = instruction.split(' ');
+    if (commands[0] === 'hlf') {
+      registers[commands[1]] /= 2;
+      pointer++;
+    } else if (commands[0] === 'tpl') {
+      registers[commands[1]] *= 3;
+      pointer++;
+    } else if (commands[0] === 'inc') {
+      registers[commands[1]] ++;
+      pointer++;
+    } else if (commands[0] === 'jmp') {
+      pointer += Number(commands[1]);
+    } else if (commands[0] === 'jie') {
+      if (registers[commands[1][0]] % 2 === 0) {
+        pointer += Number(commands[2]);
+      } else {
+        pointer++;
+      }
+    } else {
+      if (registers[commands[1][0]] === 1) {
+        pointer += Number(commands[2]);
+      } else {
+        pointer++;
+      }
+    }
+  }
+
+  console.log(registers.b);
+}
+
+// Day 24
+const day24_packages = fs.readFileSync('./2015/day24.txt', 'utf-8').split('\n').map(Number).reverse();
+
+function findIdealConfiguration(packages, groups) {
+  const balancedWeight = packages.reduce((a, b) => a + b, 0) / groups;
+  let lowestEntanglement = Infinity;
+  let leastPackages = Infinity;
+
+  // That is a VERY wrong way to do it xD
+  // But I wanted to try and it happened that it worked for my input, so I'll leave it like this and maybe will rework it later. Or maybe not.
+  packages.forEach((pack, id) => {
+    for (let i = id + 1; i < packages.length; i++) {
+      const chosenPacks = [pack];
+      let remainingWeight = balancedWeight - pack;
+
+      for (let j = i; j < packages.length; j++) {
+        if (remainingWeight >= packages[j]) {
+          remainingWeight -= packages[j];
+          chosenPacks.push(packages[j]);
+          if (groups === 4) j++;
+        }
+      }
+
+      if (remainingWeight === 0) {
+        const entanglement = chosenPacks.reduce((a, b) => a * b, 1);
+        if ((entanglement < lowestEntanglement && chosenPacks.length == leastPackages) || chosenPacks.length < leastPackages) {
+          lowestEntanglement = entanglement;
+          leastPackages = chosenPacks.length;
+        }
+      }
+    }
+  });
+  console.log(lowestEntanglement);
+}
+
+// Day 25
+const day25_console = fs.readFileSync('./2015/day25.txt', 'utf-8');
+
+function findDiagonalCode(consoleMessage) {
+  const [row, column] = consoleMessage.match(/[0-9]+/g).map(Number);
+
+  // First, get check how many times do we have to count. 1st row on column can be taken using formula for the sum of an arithmetic sequence
+  const firstRowAtColumn = (1 + column) / 2 * column;
+  // now, the row:
+  let targetRowAtColumn = firstRowAtColumn;
+  incrementer = column;
+  for (let i = 1; i < row; i++) {
+    targetRowAtColumn += incrementer;
+    incrementer++;
+  }
+
+  let targetCode = 20151125;
+  for (let i = 1; i < targetRowAtColumn; i++) {
+    targetCode = (targetCode * 252533) % 33554393;
+  }
+
+  console.log(targetCode)
+}
 
 
 // -----Answers for solved days-----
@@ -1140,3 +1374,21 @@ function getBestAndWorstEquipment(stats) {
 
 // console.log('Day 21, part 1 & 2:');
 // getBestAndWorstEquipment(day21_stats);
+
+// console.log('Day 22, part 1:');
+// simulateMagicBattle(day22_stats);
+// console.log('Day 22, part 2:');
+// simulateMagicBattle(day22_stats, true);
+
+// console.log('Day 23, part 1:');
+// operateRegisters(day23_instructions, 0);
+// console.log('Day 23, part 2:');
+// operateRegisters(day23_instructions, 1);
+
+// console.log('Day 24, part 1:');
+// findIdealConfiguration(day24_packages, 3);
+// console.log('Day 24, part 2:');
+// findIdealConfiguration(day24_packages, 4);
+
+// console.log('Day 25:');
+// findDiagonalCode(day25_console)
