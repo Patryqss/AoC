@@ -1196,8 +1196,534 @@ function countValidMessagesWithLoopedRules(rules, messages) {
 }
 
 // Day 20
+const day20_tiles = fs.readFileSync('./2020/day20.txt', 'utf-8').split('\n\n');
+
+function getPossibleEdgesOfTile(tile) {
+  // First, prepare all possible states for given tile. Each tile can be flipped/rotated in 8 different ways:
+  // original
+  const baseTile = tile.split('\n').map(row => row.split(''));
+  let tileId = Number(baseTile.shift().join('').match(/[0-9]+/g));
+  // flipX
+  const flippedTile = baseTile.map(row => [...row].reverse());
+  // rotate90Right of org & flipped
+  const tile90 = [];
+  const flippedTile90 = [];
+  for (let y = 0; y < baseTile.length; y++) {
+    const row = [];
+    const flippedRow = []
+    for (let x = 0; x < baseTile[0].length; x++) {
+      row.push(baseTile[baseTile.length - x - 1][y]);
+      flippedRow.push(flippedTile[baseTile.length - x - 1][y]);
+    }
+    tile90.push(row);
+    flippedTile90.push(flippedRow);
+  }
+  // rotate180 of org & flipped
+  const tile180 = [...flippedTile].reverse();
+  const flippedTile180 = [...baseTile].reverse();
+  // rotate270Right of org & flipped
+  const tile270 = [];
+  const flippedTile270 = [];
+  for (let y = 0; y < baseTile.length; y++) {
+    const row = [];
+    const flippedRow = []
+    for (let x = 0; x < baseTile[0].length; x++) {
+      row.push(baseTile[x][baseTile.length - y - 1]);
+      flippedRow.push(flippedTile[x][baseTile.length - y - 1]);
+    }
+    tile270.push(row);
+    flippedTile270.push(flippedRow);
+  }
+
+  const tileStates = [baseTile, tile90, tile180, tile270, flippedTile, flippedTile90, flippedTile180, flippedTile270];
+
+  const possibleEdges = [];
+  tileStates.forEach(t => {
+    const top = t[0];
+    const bottom = t[t.length - 1];
+    const left = [];
+    const right = [];
+
+    for (let y = 0; y < t.length; y++) {
+      left.push(t[y][0]);
+      right.push(t[y][t[0].length - 1]);
+    }
+    possibleEdges.push([top, right, bottom, left]);
+  })
+  return { tileId, tileStates, possibleEdges }
+}
+
+function findCornerTilesAndMatches(tiles) {
+  const tilesWithEdges = tiles.map(t => getPossibleEdgesOfTile(t));
+
+  const cornerTiles = [];
+  // Corner tiles will be the only ones that match only with 2 edges
+  tilesWithEdges.forEach(tile => {
+    let matchingTiles;
+    tile.possibleEdges.forEach((edges) => {
+      if (matchingTiles) return;
+      const currentMatchingTiles = [];
+
+      tilesWithEdges.forEach(tileToMatch => {
+        if (tileToMatch.tileId === tile.tileId) return;
+
+        const bottoms = tileToMatch.possibleEdges.map(e => e[2].join(''));
+        if (bottoms.includes(edges[0].join(''))) {
+          currentMatchingTiles.push(tileToMatch.tileId)
+          return;
+        }
+        const lefts = tileToMatch.possibleEdges.map(e => e[3].join(''));
+        if (lefts.includes(edges[1].join(''))) {
+          currentMatchingTiles.push(tileToMatch.tileId)
+          return;
+        }
+        const tops = tileToMatch.possibleEdges.map(e => e[0].join(''));
+        if (tops.includes(edges[2].join(''))) {
+          currentMatchingTiles.push(tileToMatch.tileId)
+          return;
+        }
+        const rights = tileToMatch.possibleEdges.map(e => e[1].join(''));
+        if (rights.includes(edges[3].join(''))) {
+          currentMatchingTiles.push(tileToMatch.tileId)
+          return;
+        }
+      });
+
+      if (currentMatchingTiles.length === 2) { // corner
+        cornerTiles.push(tile.tileId);
+      }
+      if (currentMatchingTiles.length > 1) {
+        matchingTiles = currentMatchingTiles;
+      }
+    });
+    tile.matchingTiles = matchingTiles;
+  });
+
+  console.log(cornerTiles.reduce((a, b) => a * b, 1));
+
+  return { corners: cornerTiles, tiles: tilesWithEdges };
+}
+
+function alignTilesAndFindMonsters(tilesData) {
+  const { corners, tiles } = tilesData;
+
+  const mapSize = Math.sqrt(tiles.length);
+  const possibleMaps = [];
+
+  const dfs = (x, y, currentMap, tilesUsedSoFar) => {
+    const tilesLeft = tiles.map(t => t.tileId).filter(t => !tilesUsedSoFar.includes(t));
+    const possibleTiles = new Set();
+    if (x > 0 && y === 0) {
+      const tileOnLeft = tiles.find(t => t.tileId === currentMap[y][x-1]);
+      tileOnLeft.matchingTiles.forEach(mt => {
+        if (tilesLeft.includes(mt)) possibleTiles.add(mt);
+      });
+    } else if (x === 0 && y > 0) {
+      const tileOnTop = tiles.find(t => t.tileId === currentMap[y-1][x]);
+      tileOnTop.matchingTiles.forEach(mt => {
+        if (tilesLeft.includes(mt)) possibleTiles.add(mt);
+      });
+    } else {
+      const tileOnLeft = tiles.find(t => t.tileId === currentMap[y][x-1]);
+      const tileOnTop = tiles.find(t => t.tileId === currentMap[y-1][x]);
+      const commonTiles = tileOnLeft.matchingTiles.filter(t => tileOnTop.matchingTiles.includes(t));
+      commonTiles.forEach(mt => {
+        if (tilesLeft.includes(mt)) possibleTiles.add(mt);
+      });
+    }
+
+    if (x === mapSize - 1 && y === mapSize - 1) {
+      if (possibleTiles.size !== 1) {
+        console.log(possibleTiles.size)
+        return;
+      }
+      const updatedMap = JSON.parse(JSON.stringify(currentMap));
+      updatedMap[y][x] = [...possibleTiles][0];
+      possibleMaps.push(updatedMap);
+      return;
+    }
+
+    possibleTiles.forEach(tile => {
+      const updatedMap = JSON.parse(JSON.stringify(currentMap));
+      updatedMap[y][x] = tile;
+      const newX = x === mapSize - 1 ? 0 : x + 1;
+      const newY = newX === 0 ? y + 1 : y;
+      dfs(newX, newY, updatedMap, [...tilesUsedSoFar, tile]);
+    })
+  }
+
+  corners.forEach(corner => {
+    const map = Array(mapSize).fill('').map(() => Array(mapSize).fill(''));
+    map[0][0] = corner;
+    dfs(1, 0, map, [corner]);
+  })
+
+  // At this point, we have all possible map combinations
+  const alignedMapSize = mapSize * 10 - 2 * mapSize;
+  let correctMapRougness;
+  let monstersFound = 0;
+  possibleMaps.forEach(tilesMap => {
+    if (monstersFound) return;
+
+    // Find correct state for all tiles
+    for (let y = 0; y < tilesMap[0].length; y++) {
+      for (let x = 0; x < tilesMap[0].length; x++) {
+        const tile = tiles.find(t => t.tileId === tilesMap[y][x]);
+        let topNeighbour, rightNeighbour, bottomNeighbour, leftNeighbour;
+        if (y > 0) topNeighbour = tiles.find(t => t.tileId === tilesMap[y-1][x]);
+        if (x < 2) rightNeighbour = tiles.find(t => t.tileId === tilesMap[y][x+1]);
+        if (y < 2) bottomNeighbour = tiles.find(t => t.tileId === tilesMap[y+1][x]);
+        if (x > 0) leftNeighbour = tiles.find(t => t.tileId === tilesMap[y][x-1]);
+        const fittingStateId = tile.possibleEdges.findIndex(edge => {
+          const bottoms = topNeighbour ? topNeighbour.possibleEdges.map(e => e[2].join('')) : null;
+          const lefts = rightNeighbour ? rightNeighbour.possibleEdges.map(e => e[3].join('')) : null;
+          const tops = bottomNeighbour ? bottomNeighbour.possibleEdges.map(e => e[0].join('')) : null;
+          const rights = leftNeighbour ? leftNeighbour.possibleEdges.map(e => e[1].join('')) : null;
+          return (!bottoms || bottoms.includes(edge[0].join(''))) &&
+            (!lefts || lefts.includes(edge[1].join(''))) &&
+            (!tops || tops.includes(edge[2].join(''))) &&
+            (!rights || rights.includes(edge[3].join('')));
+        })
+        tile.fittingState = tile.tileStates[fittingStateId];
+      }
+    }
+
+    // Change tileIds into actual, matching tiles
+    const map = Array(alignedMapSize).fill('').map(() => Array(alignedMapSize).fill(''));
+    for (let y = 0; y < alignedMapSize; y++) {
+      for (let x = 0; x < alignedMapSize; x++) {
+        const tileY = Math.floor(y / 8);
+        const tileX = Math.floor(x / 8);
+        const tile = tiles.find(t => t.tileId === tilesMap[tileY][tileX]).fittingState;
+        map[y][x] = tile[y - tileY * 8 + 1][x - tileX * 8 + 1]; // +1 cause the task says to cut edges
+      }
+    }
+
+    // Find monsters on the map
+    for (let y = 2; y < alignedMapSize; y++) {
+      for (let x = 0; x < alignedMapSize - 19; x++) {
+        if (map[y-1][x] !== '#') continue;
+        if (map[y][x+1] !== '#') continue;
+        if (map[y][x+4] !== '#') continue;
+        if (map[y-1][x+5] !== '#') continue;
+        if (map[y-1][x+6] !== '#') continue;
+        if (map[y][x+7] !== '#') continue;
+        if (map[y][x+10] !== '#') continue;
+        if (map[y-1][x+11] !== '#') continue;
+        if (map[y-1][x+12] !== '#') continue;
+        if (map[y][x+13] !== '#') continue;
+        if (map[y][x+16] !== '#') continue;
+        if (map[y-1][x+17] !== '#') continue;
+        if (map[y-1][x+18] !== '#') continue;
+        if (map[y-2][x+18] !== '#') continue;
+        if (map[y-1][x+19] !== '#') continue;
+        monstersFound++;
+      }
+    }
+    if (monstersFound > 0) {
+      correctMapRougness = JSON.stringify(map).split('').filter(x => x === '#').length;
+    }
+  });
+
+  console.log(correctMapRougness - 15 * monstersFound);
+}
+
+// Day 21
+const day21_foods = fs.readFileSync('./2020/day21.txt', 'utf-8').split('\n');
+
+function findDangerousFood(foods) {
+  const allergensList = {};
+  const allIngredients = new Set();
+  const allAllergens = new Set();
+
+  foods.forEach(food => {
+    food = food.substring(0, food.length - 1);
+    let [ingredients, allergens] = food.split(' (contains ');
+    ingredients = ingredients.split(' ');
+    allergens = allergens.split(', ');
+
+    ingredients.forEach(i => allIngredients.add(i));
+    allergens.forEach(al => {
+      allAllergens.add(al);
+      if (!allergensList[al]) {
+        allergensList[al] = ingredients;
+      } else {
+        allergensList[al] = allergensList[al].filter(i => ingredients.includes(i))
+      }
+    })
+  });
+
+  const ingWithAllergens = new Set();
+  Object.values(allergensList).forEach(ingList => {
+    ingList.forEach(i => ingWithAllergens.add(i));
+  });
+  const ingWithoutAllergens = [...allIngredients].filter(i => !ingWithAllergens.has(i))
+
+  let occurance = 0;
+  foods.forEach(food => {
+    food = food.split(' ');
+    food.forEach(ing => {
+      if (ingWithoutAllergens.includes(ing)) occurance++;
+    })
+  });
+  console.log(occurance);
+
+  while (Object.values(allergensList).some(l => l.length > 1)) {
+    const excludedIng = [];
+    Object.values(allergensList).forEach(list => {
+      if (list.length === 1 && !excludedIng.includes(list[0])) {
+        const ingToExclude = list[0];
+        excludedIng.push(list[0]);
+        Object.entries(allergensList).forEach(([allergen, l]) => {
+          if (l.length > 1) {
+            allergensList[allergen] = l.filter(ing => ing !== ingToExclude);
+          }
+        });
+      }
+    })
+  }
+
+  let canonicalDangerousIngredientList = '';
+  [...allAllergens].sort().forEach(al => {
+    canonicalDangerousIngredientList += `${allergensList[al][0]},`
+  })
+  console.log(canonicalDangerousIngredientList.slice(0, -1))
+}
+
+// Day 22
+const day22_players = fs.readFileSync('./2020/day22.txt', 'utf-8').split('\n\n');
+
+function playCombatGame(players, recursive = false) {
+  const player1 = players[0].split('\n').slice(1).map(Number);
+  const player2 = players[1].split('\n').slice(1).map(Number);
+
+  const combat = (deck1, deck2) => {
+    let wasRepeat = false
+    const historyOfDecks = [];
+    while (deck1.length !== 0 && deck2.length !== 0) {
+      if (historyOfDecks.includes(JSON.stringify([deck1, deck2]))) {
+        wasRepeat = true;
+        break;
+      }
+      historyOfDecks.push(JSON.stringify([deck1, deck2]));
+      const card1 = deck1.splice(0, 1)[0];
+      const card2 = deck2.splice(0, 1)[0];
+      if (recursive && card1 <= deck1.length && card2 <= deck2.length) {
+        const { winner } = combat([...deck1].slice(0, card1), [...deck2].slice(0, card2));
+        if (winner === 1) {
+          deck1.push(card1, card2);
+        } else {
+          deck2.push(card2, card1);
+        }
+      } else if (card1 > card2) {
+        deck1.push(card1, card2);
+      } else {
+        deck2.push(card2, card1);
+      }
+    }
+    return { deck1, deck2, winner: deck1.length > 0 || wasRepeat ? 1 : 2 }
+  }
+
+  const { deck1, deck2 } = combat(player1, player2);
+  const winningPlayer = deck1.length > 0 ? deck1.reverse() : deck2.reverse();
+
+  let score = 0;
+  for (let i = 1; i <= winningPlayer.length; i++) {
+    score += i * winningPlayer[i - 1];
+  }
+  console.log(score);
+}
+
+// Day 23
+const day23_cups = fs.readFileSync('./2020/day23.txt', 'utf-8').split('').map(Number);
+
+function moveCrabCups(cups) {
+  let i = 0;
+  for (let move = 1; move <= 100; move++) {
+    const target = cups[i];
+    if (i > 5) {
+      const toMoveAtFront = cups.splice(5);
+      cups.unshift(...toMoveAtFront);
+      i = cups.indexOf(target);
+    }
+
+    const pickUp = cups.splice(i + 1, 3);
+    let possibleDestination = target - 1;
+    while (!cups.includes(possibleDestination)) {
+      possibleDestination--;
+      if (possibleDestination <= 0) {
+        possibleDestination = 9;
+      }
+    }
+    cups.splice((cups.indexOf(possibleDestination) + 1) % 9, 0, ...pickUp);
+    i = (cups.indexOf(target) + 1) % 9;
+  }
+
+  const result = [];
+  while (result.length < 8) {
+    const x = cups.indexOf(1);
+    const toCut = cups.splice((x + 1) % cups.length, 1);
+    result.push(toCut);
+  }
+  console.log(result.join(''));
+}
+
+function moveMassiveAmountOfCrabCups(cups, position = 0, startingMove = 1) {
+  if (cups.length === 9) {
+    for (let x = 10; x <= 1000000; x++) {
+      cups.push(x);
+    }
+  }
+  let i = position;
+  for (let move = startingMove; move <= 10000000; move++) {
+    if (move % 10000 === 0) {
+      fs.writeFileSync('./2020/day23_cups.txt', JSON.stringify(cups));
+      fs.writeFileSync('./2020/day23_data.txt', JSON.stringify({ move, i }));
+      // console.log(`Processing... ${move / 100000}%`);
+    }
+    const target = cups[i];
+    if (i > 999995) {
+      const toMoveAtFront = cups.splice(999995);
+      cups.unshift(...toMoveAtFront);
+      i = cups.indexOf(target);
+    }
+
+    const pickUp = cups.splice(i + 1, 3);
+    let possibleDestination = target - 1;
+    while (!cups.includes(possibleDestination)) {
+      possibleDestination--;
+      if (possibleDestination <= 0) {
+        possibleDestination = 1000000;
+      }
+    }
+    cups.splice((cups.indexOf(possibleDestination) + 1) % 1000000, 0, ...pickUp);
+    i = (cups.indexOf(target) + 1) % 1000000;
+  }
+
+  const cup1 = cups.indexOf(1);
+  const nextCup = cups[cup1 + 1];
+  const nextNextCup = cups[cup1 + 2];
+
+  console.log(nextCup * nextNextCup);
+}
+
+// Day 24
+const day24_navs = fs.readFileSync('./2020/day24.txt', 'utf-8').split('\n');
+
+const navOnHex = {
+  e: (a, b) => [a + 2, b],
+  w: (a, b) => [a - 2, b],
+  ne: (a, b) => [a + 1, b - 2],
+  se: (a, b) => [a + 1, b + 2],
+  nw: (a, b) => [a - 1, b - 2],
+  sw: (a, b) => [a - 1, b + 2],
+};
+
+function turnHexTiles(navs) {
+  let blackTiles = new Set()
+
+  // Day 0
+  navs.forEach(nav => {
+    let position = [0, 0];
+    let navsLeft = nav;
+
+    while (navsLeft.length > 0) {
+      if (navsLeft.startsWith('e') || navsLeft.startsWith('w')) {
+        position = navOnHex[navsLeft[0]](...position);
+        navsLeft = navsLeft.substring(1);
+      } else {
+        position = navOnHex[navsLeft.substring(0, 2)](...position);
+        navsLeft = navsLeft.substring(2);
+      }
+    }
+
+    const finalNav = position.join('x');
+    if (blackTiles.has(finalNav)) {
+      blackTiles.delete(finalNav);
+    } else {
+      blackTiles.add(finalNav);
+    }
+  });
+
+  // Part 1
+  console.log(blackTiles.size);
+
+  // Days 1-100
+  for (let i = 1; i <= 100; i++) {
+    const minX = Math.min(...[...blackTiles].map(t => Number(t.split('x')[0])));
+    const maxX = Math.max(...[...blackTiles].map(t => Number(t.split('x')[0])));
+    const minY = Math.min(...[...blackTiles].map(t => Number(t.split('x')[1])));
+    const maxY = Math.max(...[...blackTiles].map(t => Number(t.split('x')[1])));
+
+    const newTiles = new Set();
 
 
+    for (let x = minX - 1; x <= maxX + 1; x++) {
+      let finalMinY, finalMaxY;
+      if (x % 2 === 0) {
+        finalMinY = minY % 4 === 0 ? minY : minY - 2;
+        finalMaxY = maxY % 4 === 0 ? maxY : maxY + 2;
+      } else {
+        finalMinY = minY % 4 === 0 ? minY - 2 : minY;
+        finalMaxY = maxY % 4 === 0 ? maxY + 2 : maxY;
+      }
+
+      for (let y = finalMinY; y <= finalMaxY; y += 4) {
+        let neighbours = 0;
+        if (blackTiles.has(`${x+2}x${y}`)) neighbours++;
+        if (blackTiles.has(`${x-2}x${y}`)) neighbours++;
+        if (blackTiles.has(`${x+1}x${y-2}`)) neighbours++;
+        if (blackTiles.has(`${x+1}x${y+2}`)) neighbours++;
+        if (blackTiles.has(`${x-1}x${y-2}`)) neighbours++;
+        if (blackTiles.has(`${x-1}x${y+2}`)) neighbours++;
+
+        if (blackTiles.has(`${x}x${y}`)) {
+          if (neighbours === 1 || neighbours === 2) {
+            newTiles.add(`${x}x${y}`);
+          }
+        } else {
+          if (neighbours === 2) {
+            newTiles.add(`${x}x${y}`);
+          }
+        }
+      }
+    }
+
+    blackTiles = newTiles;
+  }
+
+  // Part 2
+  console.log(blackTiles.size);
+}
+
+// Day 25
+const day25_keys = fs.readFileSync('./2020/day25.txt', 'utf-8').split('\n').map(Number);
+
+function findEncryptionKey(publicKeys) {
+  let publicKeyToUse = null;
+  let loop = 0;
+  let subjectNumber = 1;
+
+  while (!publicKeyToUse) {
+    loop++
+    subjectNumber *= 7;
+    subjectNumber = subjectNumber % 20201227;
+    if (subjectNumber === publicKeys[0]) {
+      publicKeyToUse = publicKeys[1];
+    }
+    if (subjectNumber === publicKeys[1]) {
+      publicKeyToUse = publicKeys[0];
+    }
+  }
+
+  let encryptionKey = 1;
+  for (let i = 0; i < loop; i++) {
+    encryptionKey *= publicKeyToUse;
+    encryptionKey = encryptionKey % 20201227;
+  }
+
+  console.log(encryptionKey);
+}
 
 
 // -----Answers for solved days-----
@@ -1295,3 +1821,33 @@ function countValidMessagesWithLoopedRules(rules, messages) {
 // countValidMessages(day19_rules, day19_messages);
 // console.log('Day 19, part 2:');
 // countValidMessagesWithLoopedRules(day19_rules, day19_messages);
+
+// console.log('Day 20, part 1:');
+// const tilesData = findCornerTilesAndMatches(day20_tiles)
+// console.log('Day 20, part 2:');
+// alignTilesAndFindMonsters(tilesData);
+
+// console.log('Day 21, part 1 & 2:');
+// findDangerousFood(day21_foods)
+
+// console.log('Day 22, part 1:');
+// playCombatGame(day22_players);
+// console.log('Day 22, part 2 (this will take a while):');
+// playCombatGame(day22_players, true);
+
+// console.log('Day 23, part 1:');
+// moveCrabCups(day23_cups);
+// console.log('Day 23, part 2 (this takes about 8-9h xD):');
+// moveMassiveAmountOfCrabCups(day23_cups);
+// For immediate answer, run the 3 lines below:
+/*
+const { move, i } = JSON.parse(fs.readFileSync('./2020/day23_data.txt', 'utf-8'));
+const cups = JSON.parse(fs.readFileSync('./2020/day23_cups.txt', 'utf-8'));
+moveMassiveAmountOfCrabCups(cups, i, move);
+*/
+
+// console.log('Day 24, part 1 & 2:');
+// turnHexTiles(day24_navs);
+
+// console.log('Day 25');
+// findEncryptionKey(day25_keys);

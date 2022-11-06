@@ -1137,7 +1137,6 @@ function countViablePairs(nodes) {
       size: nums[2],
       used: nums[3],
       available: nums[4],
-      usedPct: nums[5],
     }
   });
   let viablePairs = 0;
@@ -1151,9 +1150,126 @@ function countViablePairs(nodes) {
   });
 
   console.log(viablePairs);
+  return nodeData;
 }
 
-// Part 2 ??
+function moveDataTo0x0(nodeData) {
+  const gridX = Math.max(...nodeData.map(node => node.x)) + 1;
+  const gridY = Math.max(...nodeData.map(node => node.y)) + 1;
+
+  const nodeGrid = Array(gridY).fill('').map(() => Array(gridX).fill(''));
+  nodeData.forEach(node => {
+    nodeGrid[node.y][node.x] = {
+      size: node.size,
+      used: node.used,
+      available: node.available,
+      isTarget: node.y === 0 && node.x === gridX - 1,
+    };
+  });
+
+  const findAvaliableMoves = (grid) => {
+    const moves = {};
+    let targetX, targetY;
+    for (let y = 0; y < grid.length; y++) {
+      for (let x = 0; x < grid[0].length; x++) {
+        if (grid[y][x].isTarget) {
+          targetX = x;
+          targetY = y;
+          break;
+        }
+      }
+      if (targetY) break;
+    }
+    let checkArea = 3; //Reduce searching area as moves on completely other side of grid might not be relevant
+    while (Object.keys(moves).length === 0) {
+      checkArea++;
+      for (let y = Math.max(0, targetY - checkArea); y < Math.min(targetY + checkArea, grid.length); y++) {
+        for (let x = Math.max(0, targetX - checkArea); x < Math.min(targetX + checkArea, grid[0].length); x++) {
+          if (grid[y][x].used > 0) {
+            moves[`${y}x${x}`] = [];
+            if (x > 0 && grid[y][x-1].available > grid[y][x].used) moves[`${y}x${x}`].push(`${y}x${x-1}`);
+            if (x < grid[0].length - 1 && grid[y][x+1].available > grid[y][x].used) moves[`${y}x${x}`].push(`${y}x${x+1}`);
+            if (y > 0 && grid[y-1][x].available > grid[y][x].used) moves[`${y}x${x}`].push(`${y-1}x${x}`);
+            if (y < grid.length - 1 && grid[y+1][x].available > grid[y][x].used) moves[`${y}x${x}`].push(`${y+1}x${x}`);
+
+            if (moves[`${y}x${x}`].length === 0) delete moves[`${y}x${x}`];
+          }
+        }
+      }
+    }
+    return moves;
+  }
+
+  let step = 0;
+  let minSteps;
+  const queue = { 0: [{ grid: nodeGrid }]};
+  let targetMoved = false;
+
+  const clearQueue = () => {
+    queue[step].shift();
+    if (queue[step].length === 0) {
+      delete queue[step];
+      step++;
+    }
+  }
+
+  const savedGrids = [];
+
+  // BFS
+  while (!targetMoved) {
+    const { grid } = queue[step][0];
+
+    if (savedGrids.includes(JSON.stringify(grid))) {
+      clearQueue(); // This setting was already used somewhere else
+      continue;
+    }
+    savedGrids.push(JSON.stringify(grid));
+    const availableMoves = findAvaliableMoves(grid);
+
+    Object.entries(availableMoves).forEach(([from, to]) => {
+      const [fromY, fromX] = from.split('x');
+      const movingData = grid[fromY][fromX];
+      to.forEach(newSpot => {
+        const updatedGrid = JSON.parse(JSON.stringify(grid));
+        updatedGrid[fromY][fromX] = {
+          size: updatedGrid[fromY][fromX].size,
+          used: 0,
+          available: updatedGrid[fromY][fromX].size,
+          isTarget: false,
+        };
+
+        const [toY, toX] = newSpot.split('x');
+
+        if (movingData.isTarget) {
+          targetMoved = true;
+          //Once the target is moved for the first time, it then takes 5 additional moves to move it to the left
+          //So to get the final result, we have to add 5 * <remaining steps> to the current step. This won't work on inputs that have small disks on the first row, but I was lucky enough not to get that one xD.
+          minSteps = step + 1 + 5 * toX;
+          return;
+        }
+
+        updatedGrid[toY][toX] = {
+          size: updatedGrid[toY][toX].size,
+          used: updatedGrid[toY][toX].used + movingData.used,
+          available: updatedGrid[toY][toX].available - movingData.used,
+          isTarget: movingData.isTarget
+        };
+
+        if (!queue[step + 1]) {
+          queue[step + 1] = [{ grid: updatedGrid }];
+        } else {
+          queue[step + 1].push({ grid: updatedGrid });
+        }
+      })
+    });
+
+    clearQueue();
+  }
+
+  console.log(minSteps);
+}
+
+// Day 23
 
 
 
@@ -1260,4 +1376,6 @@ function countViablePairs(nodes) {
 // unscrambleLetters('fbgdceah', day21_operations.reverse());
 
 // console.log('Day 22 part 1:');
-// countViablePairs(day22_nodes);
+// const nodeData = countViablePairs(day22_nodes);
+// console.log('Day 22 part 2:');
+// moveDataTo0x0(nodeData);
