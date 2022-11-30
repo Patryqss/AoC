@@ -29,6 +29,15 @@ class IntCodeComputer {
     return this.output;
   }
 
+  getASCIIOutput(asString = false) {
+    const output = this.getOutput().map(code => String.fromCharCode(code));
+    if (asString) {
+      return output.join('');
+    } else {
+      return output;
+    }
+  }
+
   getOpcode() {
     return this.opcode;
   }
@@ -39,6 +48,11 @@ class IntCodeComputer {
     } else {
       this.input.push(value);
     }
+  }
+
+  addASCIIInput(string) {
+    this.addInput(string.split('').map(char => char.charCodeAt()));
+    this.addInput(10);
   }
 
   isInPause() {
@@ -1095,7 +1109,7 @@ const day17_opcodes = fs.readFileSync('./2019/day17.txt', 'utf-8').split(',').ma
 function buildCameraView(opcodes) {
   const computer = new IntCodeComputer(opcodes, [], true);
   computer.runComputer();
-  const output = computer.getOutput().map(code => String.fromCharCode(code));
+  const output = computer.getASCIIOutput();
   const cameraView = [];
   let robotPosition = '';
 
@@ -1223,26 +1237,16 @@ function navigateRobotOnScafflod(opcodes) {
   const A = 'L,10,R,8,R,6,R,10';
   const B = 'L,12,R,8,L,12';
   const C = 'L,10,R,8,R,8';
-  let compiledWayOut = wayOut.replaceAll(A, 'A').replaceAll(B, 'B').replaceAll(C, 'C');
-  compiledWayOut = compiledWayOut.split('').map(char => char.charCodeAt());
-  compiledWayOut.push(10);
-
-  const compiledA = A.split('').map(char => char.charCodeAt());
-  compiledA.push(10);
-  const compiledB = B.split('').map(char => char.charCodeAt());
-  compiledB.push(10);
-  const compiledC = C.split('').map(char => char.charCodeAt());
-  compiledC.push(10);
+  const compiledWayOut = wayOut.replaceAll(A, 'A').replaceAll(B, 'B').replaceAll(C, 'C');
 
   opcodes[0] = 2;
   const computer = new IntCodeComputer(opcodes, []);
 
-  computer.addInput(compiledWayOut);
-  computer.addInput(compiledA);
-  computer.addInput(compiledB);
-  computer.addInput(compiledC);
-  computer.addInput('y'.charCodeAt());
-  computer.addInput(10);
+  computer.addASCIIInput(compiledWayOut);
+  computer.addASCIIInput(A);
+  computer.addASCIIInput(B);
+  computer.addASCIIInput(C);
+  computer.addASCIIInput('y');
 
   computer.runComputer();
 
@@ -1640,6 +1644,78 @@ function findExitInMaze(maze) {
 }
 
 // Day 21
+const day21_opcodes = fs.readFileSync('./2019/day21.txt', 'utf-8').split(',').map(Number);
+
+function navigateWalkingSpringdroid(opcodes) {
+  const computer = new IntCodeComputer([...opcodes], [], true);
+  computer.runComputer();
+  const commands = [
+  'NOT A J', // Jump over 1 tile
+  'NOT B T', 'AND C T', 'OR T J', // Jump over 2 tiles if 3rd exists
+  'NOT C T', 'AND D T', 'OR T J' // Jump over 3 tiles if 4th exists
+  ];
+  commands.forEach(c => {
+    computer.addASCIIInput(c);
+  })
+  computer.addASCIIInput('WALK');
+  computer.runComputer();
+  const output = computer.getOutput();
+  console.log(output[output.length - 1]);
+}
+
+function navigateRunningSpringdroid(opcodes) {
+  const computer = new IntCodeComputer([...opcodes], [], true);
+  computer.runComputer();
+  const commands = [
+    'NOT A T', 'AND D T', 'OR T J', // Jump over 1 tile if 4th exists
+    'NOT B T', 'AND D T', 'OR T J', // Jump over 2 tiles if 4th exists
+    'NOT C T', 'AND D T', 'AND H T', 'OR T J' // Jump over 3 tiles if 4th and 8th exists
+  ];
+  commands.forEach(c => {
+    computer.addASCIIInput(c);
+  })
+  computer.addASCIIInput('RUN');
+  computer.runComputer();
+  const output = computer.getOutput();
+  console.log(output[output.length - 1]);
+}
+
+// Day 22
+const day22_shuffles = fs.readFileSync('./2019/day22.txt', 'utf-8').split('\n');
+
+function shuffleCards(shuffles, cardsCount) {
+  const NUMBER_REGEX = /-?[0-9]+/g;
+  let deck = Array.from(Array(cardsCount).keys());
+
+  shuffles.forEach(shuffle => {
+    if (shuffle === 'deal into new stack') {
+      deck.reverse();
+    } else if (shuffle.startsWith('cut')) {
+      const amount = Number(shuffle.match(NUMBER_REGEX)[0]);
+      if (amount > 0) {
+        const cut = deck.splice(0, amount);
+        deck.push(...cut);
+      } else {
+        const cut = deck.splice(amount);
+        deck.unshift(...cut)
+      }
+    } else {
+      const inc = Number(shuffle.match(NUMBER_REGEX)[0]);
+      const newDeck = Array(cardsCount);
+      let i = 0;
+      for (let x = 0; x < cardsCount; x++) {
+        newDeck[i] = deck[x];
+        i = (i + inc) % cardsCount;
+      }
+      deck = newDeck;
+    }
+  })
+
+  console.log(deck.indexOf(2019));
+}
+
+// Part 2 ???
+
 
 
 
@@ -1747,3 +1823,11 @@ getOffsetFromFFTSignal(phaseXInput, { phase: finishedPhases });
 
 // console.log('Day 20 (this will take 2-3 minutes):');
 // findExitInMaze(day20_maze);
+
+// console.log('Day 21, part 1:');
+// navigateWalkingSpringdroid(day21_opcodes);
+// console.log('Day 21, part 2:');
+// navigateRunningSpringdroid(day21_opcodes);
+
+// console.log('Day 22, part 1:');
+// shuffleCards(day22_shuffles, 10007);

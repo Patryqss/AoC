@@ -659,43 +659,90 @@ function visualiseBuilding(floorsData) {
 //Day 12
 const day12_instructions = fs.readFileSync('./2016/day12.txt', 'utf-8').split('\n');
 
-function decodeRegisters(instructions, cValue) {
-  const registers = { a: 0, b: 0, c: cValue, d: 0 };
-  let pointer = 0;
+// Used in days 12, 23 & 25
+class MonorailComputer {
+  constructor(registers, instructions) {
+    this.instructions = instructions;
+    this.registers = registers;
+    this.pointer = 0;
+    this.output = [];
+  }
 
-  while (pointer < instructions.length) {
-    const inst = instructions[pointer].split(' ');
-    if (inst[0] === 'cpy') {
-      if (isNaN(inst[1])) {
-        registers[inst[2]] = registers[inst[1]];
-      } else {
-        registers[inst[2]] = Number(inst[1]);
-      }
-      pointer++;
-    } else if (inst[0] === 'inc') {
-      registers[inst[1]]++;
-      pointer++;
-    } else if (inst[0] === 'dec') {
-      registers[inst[1]]--;
-      pointer++;
+  cpy(a, b) {
+    if (isNaN(b)) {
+      if (isNaN(a)) this.registers[b] = this.registers[a];
+      else this.registers[b] = Number(a);
+    }
+    this.pointer++;
+  }
+
+  inc(a) {
+    this.registers[a]++;
+    this.pointer++;
+  }
+
+  dec(a) {
+    this.registers[a]--;
+    this.pointer++;
+  }
+
+  jnz(a, b) {
+    const jumpBy = isNaN(b) ? this.registers[b] : Number(b);
+    if (isNaN(a)) {
+      if (this.registers[a] !== 0) this.pointer += jumpBy;
+      else this.pointer++;
     } else {
-      if (isNaN(inst[1])) {
-        if (registers[inst[1]] !== 0) {
-          pointer += Number(inst[2]);
-        } else {
-          pointer++;
-        }
-      } else {
-        if (Number(inst[1] !== 0)) {
-          pointer += Number(inst[2]);
-        } else {
-          pointer++;
-        }
-      }
+      if (Number(a) !== 0) this.pointer += jumpBy;
+      else this.pointer++;
     }
   }
 
-  console.log(registers.a)
+  tgl(a) {
+    const id = this.pointer + this.registers[a];
+    if (id < 0 || id >= this.instructions.length) {
+      this.pointer++;
+      return;
+    }
+    if (this.instructions[id].startsWith('inc')) this.instructions[id] = this.instructions[id].replace('inc', 'dec');
+    else if (this.instructions[id].startsWith('dec')) this.instructions[id] = this.instructions[id].replace('dec', 'inc');
+    else if (this.instructions[id].startsWith('tgl')) this.instructions[id] = this.instructions[id].replace('tgl', 'inc');
+    else if (this.instructions[id].startsWith('jnz')) this.instructions[id] = this.instructions[id].replace('jnz', 'cpy');
+    else if (this.instructions[id].startsWith('cpy')) this.instructions[id] = this.instructions[id].replace('cpy', 'jnz');
+    this.pointer++;
+  }
+
+  out(a) {
+    this.output.push(this.registers[a]);
+    this.pointer++;
+  }
+
+  runComputer() {
+    while (this.pointer >= 0 && this.pointer < this.instructions.length && this.output.length < 10) {
+      const inst = this.instructions[this.pointer].split(' ');
+      this[inst[0]](inst[1], inst[2]);
+    }
+  }
+
+  runSmartComputer() {
+    // Day 23 takes too long to calculate, so this function can be used to speed things up. WORKS ONLY ON DAY 23
+    while (this.pointer >= 0 && this.pointer < this.instructions.length) {
+      if (this.pointer === 4) {
+        this.registers.a += this.registers.b * this.registers.d;
+        this.registers.c = 0;
+        this.registers.d = 0;
+        this.pointer = 9;
+      }
+      const inst = this.instructions[this.pointer].split(' ');
+      this[inst[0]](inst[1], inst[2]);
+    }
+  }
+}
+
+function decodeRegisters(instructions, cValue) {
+  const registers = { a: 0, b: 0, c: cValue, d: 0 };
+  const computer = new MonorailComputer(registers, instructions);
+  computer.runComputer();
+  console.log(computer.registers.a)
 }
 
 //Day 13
@@ -1270,7 +1317,137 @@ function moveDataTo0x0(nodeData) {
 }
 
 // Day 23
+const day23_instructions = fs.readFileSync('./2016/day23.txt', 'utf-8').split('\n');
 
+function decodeNewRegisters(instructions, aValue) {
+  const registers = { a: aValue, b: 0, c: 0, d: 0 };
+  const computer = new MonorailComputer(registers, instructions);
+  computer.runSmartComputer();
+  console.log(computer.registers.a)
+}
+
+// Day 24
+const day24_maze = fs.readFileSync('./2016/day24.txt', 'utf-8').split('\n').map(row => row.split(''));
+
+function generateRoutes(maze) {
+  const routes = new Graph();
+
+  for (let y = 0; y < maze.length; y++) {
+    for (let x = 0; x < maze[0].length; x++) {
+      if (maze[y][x] === '#') continue;
+      const from = `${x},${y}`;
+      const to = new Map();
+
+      if (maze[y-1] && maze[y-1][x] !== '#') to.set(`${x},${y-1}`, 1);
+      if (maze[y][x-1] && maze[y][x-1] !== '#') to.set(`${x-1},${y}`, 1);
+      if (maze[y][x+1] && maze[y][x+1] !== '#') to.set(`${x+1},${y}`, 1);
+      if (maze[y+1] && maze[y+1][x] !== '#') to.set(`${x},${y+1}`, 1);
+
+      routes.addNode(from, to);
+    }
+  }
+
+  return routes;
+}
+
+function findPathForRobot(maze, withReturn = false) {
+  const pointsLocations = {};
+  let zeroLocation;
+
+  for (let y = 0; y < maze.length; y++) {
+    for (let x = 0; x < maze[0].length; x++) {
+      if (maze[y][x] !== '.' && maze[y][x] !== '#') {
+        if (maze[y][x] === '0') {
+          zeroLocation = `${x},${y}`;
+        } else {
+          pointsLocations[maze[y][x]] = `${x},${y}`;
+        }
+      }
+    }
+  }
+  const pointsToVisit = Object.keys(pointsLocations).length;
+
+  let fewestSteps;
+  let currentStep = 0;
+  const savedMazes = new Set();
+  const queue = { 0: [{
+    currentMaze: JSON.parse(JSON.stringify(maze)),
+    robotLocation: zeroLocation,
+    locationsToVisit: pointsLocations,
+    visitedPoints: 0
+  }]}
+
+  const clearQueue = () => {
+    queue[currentStep].shift();
+    if (queue[currentStep].length === 0) {
+      delete queue[currentStep];
+      currentStep++;
+    }
+  }
+
+  while(!fewestSteps) {
+    while (!queue[currentStep]) {
+      currentStep++;
+    }
+    const { currentMaze, robotLocation, locationsToVisit, visitedPoints } = queue[currentStep][0];
+
+    if (Object.keys(locationsToVisit).length === 0) {
+      fewestSteps = currentStep;
+      break;
+    }
+    if (savedMazes.has(JSON.stringify(currentMaze)) && visitedPoints < 7) {
+      clearQueue(); // There was a faster way here and already is somewhere in queue.
+      continue;
+    }
+    savedMazes.add(JSON.stringify(currentMaze));
+
+    const routes = generateRoutes(currentMaze);
+    Object.entries(locationsToVisit).forEach(([point, target]) => {
+      const stepsToTarget = routes.path(robotLocation, target, { cost: true }).cost;
+      const stepsAfterMove = currentStep + stepsToTarget;
+      const test = [482, 490, 498, 656, 692, 700]
+
+      const newMaze = JSON.parse(JSON.stringify(currentMaze))
+      const [x, y] = target.split(',').map(Number);
+      newMaze[y][x] = '.';
+
+      const remainingLocations = { ...locationsToVisit };
+      delete remainingLocations[point];
+
+      const updatedVisitedPoints = visitedPoints + 1;
+      if (updatedVisitedPoints === pointsToVisit && withReturn) {
+        // Part 2
+        remainingLocations['0'] = zeroLocation;
+      }
+
+      if (!queue[stepsAfterMove]) {
+        queue[stepsAfterMove] = [{ currentMaze: newMaze, robotLocation: target, locationsToVisit: remainingLocations, visitedPoints: updatedVisitedPoints }];
+      } else {
+        queue[stepsAfterMove].push({ currentMaze: newMaze, robotLocation: target, locationsToVisit: remainingLocations, visitedPoints: updatedVisitedPoints });
+      }
+    })
+
+    clearQueue();
+  }
+
+  console.log(fewestSteps);
+}
+
+// Day 25
+const day25_instructions = fs.readFileSync('./2016/day25.txt', 'utf-8').split('\n');
+
+function findInputForClockSignal(instructions) {
+  let x = -1;
+  let output;
+  while(output !== '0101010101') {
+    x++;
+    const registers = { a: x, b: 0, c: 0, d: 0 };
+    const computer = new MonorailComputer(registers, instructions);
+    computer.runComputer();
+    output = computer.output.join('');
+  }
+  console.log(x);
+}
 
 
 // -----Answers for solved days-----
@@ -1379,3 +1556,16 @@ function moveDataTo0x0(nodeData) {
 // const nodeData = countViablePairs(day22_nodes);
 // console.log('Day 22 part 2:');
 // moveDataTo0x0(nodeData);
+
+// console.log('Day 23 part 1:');
+// decodeNewRegisters([...day23_instructions], 7)
+// console.log('Day 23 part 2:');
+// decodeNewRegisters([...day23_instructions], 12)
+
+// console.log('Day 24 part 1:');
+// findPathForRobot(day24_maze);
+// console.log('Day 24 part 2:');
+// findPathForRobot(day24_maze, true);
+
+// console.log('Day 25:');
+// findInputForClockSignal(day25_instructions)
