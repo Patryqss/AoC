@@ -1215,6 +1215,643 @@ function findBiggestMagnitudeOfTwoSnailNumbers(numbers) {
 }
 
 // Day 19
+const day19_scanners = fs.readFileSync('./2021/day19.txt', 'utf-8').split('\n\n');
+
+function rotateThingsToDir(position, dir) {
+  const [x, y, z] = position.split(',').map(Number);
+  return {
+    1: `${x},${y},${z}`,
+    2: `${-y},${x},${z}`,
+    3: `${-x},${-y},${z}`,
+    4: `${y},${-x},${z}`,
+    5: `${x},${z},${-y}`,
+    6: `${-y},${z},${-x}`,
+    7: `${-x},${z},${y}`,
+    8: `${y},${z},${x}`,
+    9: `${x},${-y},${-z}`,
+    10: `${-y},${-x},${-z}`,
+    11: `${-x},${y},${-z}`,
+    12: `${y},${x},${-z}`,
+    13: `${x},${-z},${y}`,
+    14: `${-y},${-z},${x}`,
+    15: `${-x},${-z},${-y}`,
+    16: `${y},${-z},${-x}`,
+    17: `${-z},${y},${x}`,
+    18: `${-z},${x},${-y}`,
+    19: `${-z},${-y},${-x}`,
+    20: `${-z},${-x},${y}`,
+    21: `${z},${y},${-x}`,
+    22: `${z},${x},${y}`,
+    23: `${z},${-y},${x}`,
+    24: `${z},${-x},${-y}`,
+  }[dir];
+}
+
+class Beacon {
+  constructor(position) {
+    const [x,y,z] = position.split(',').map(Number);
+    this.x = x;
+    this.y = y;
+    this.z = z;
+  }
+
+  updatePosition(position) {
+    this.x = position[0];
+    this.y = position[1];
+    this.z = position[2];
+  }
+  get position() {
+    return { x: this.x, y: this.y, z: this.z };
+  }
+  get positionLabel() {
+    return `${this.x},${this.y},${this.z}`;
+  }
+  getNeighboursForDir(otherBeacons, dir) {
+    const neighbours = [];
+    otherBeacons.forEach(beacon => {
+      const otherPos = beacon.position;
+      neighbours.push(rotateThingsToDir(`${this.x - otherPos.x},${this.y - otherPos.y},${this.z - otherPos.z}`, dir))
+    })
+    return neighbours;
+  }
+}
+
+function findAllNeighbours(beacons, dir = 1) {
+  const neighbours = [];
+  beacons.forEach(beacon => {
+    const others = beacons.filter(b => b.positionLabel !== beacon.positionLabel);
+    neighbours.push(beacon.getNeighboursForDir(others, dir));
+  });
+  return neighbours;
+}
+
+function findDistinctBeacons(scanners_raw) {
+  const scanners = scanners_raw.map((scanner, id) => {
+    const beacons = scanner.split('\n');
+    beacons.shift(); //remove title
+    return { id, beacons: beacons.map(b => new Beacon(b)), position: undefined };
+  });
+
+  const connectedBeacons = [...scanners[0].beacons];
+  scanners[0].position = [0, 0, 0]
+  let processedScanners = 0;
+
+  while(!scanners.every(sc => !!sc.position)) {
+    scanners.forEach(scanner => {
+      if (scanner.position) return;
+      const knownNeighbours = findAllNeighbours(connectedBeacons);
+      const knownLocations = connectedBeacons.map(b => b.positionLabel);
+      const beacons = scanner.beacons;
+      for (let dir = 1; dir <= 24; dir++) {
+        if (scanner.position) return;
+        const newNeighbours = findAllNeighbours(beacons, dir);
+        let overlappingBeacons = 0;
+        let lastOvelapped, overlappedWith;
+
+        newNeighbours.forEach((newNeigh, newBeaconId) => {
+          knownNeighbours.forEach((knNeigh, oldBeaconId) => {
+            const matching = newNeigh.filter(n => knNeigh.includes(n)).length;
+            if (matching >= 11) {
+              // 11 matching neighbours + checked beacon
+              overlappingBeacons++;
+              lastOvelapped = scanner.beacons[newBeaconId];
+              overlappedWith = connectedBeacons[oldBeaconId];
+            }
+          })
+        });
+        if (overlappingBeacons >= 12) {
+          const afterRotate = rotateThingsToDir(lastOvelapped.positionLabel, dir).split(',').map(Number);
+          scanner.position = [
+            overlappedWith.x - afterRotate[0],
+            overlappedWith.y - afterRotate[1],
+            overlappedWith.z - afterRotate[2],
+          ]
+          scanner.beacons.forEach(beacon => {
+            let updatedBeaconPos = rotateThingsToDir(beacon.positionLabel, dir).split(',').map(Number);
+            updatedBeaconPos = updatedBeaconPos.map((pos, id) => pos + scanner.position[id]);
+            beacon.updatePosition(updatedBeaconPos);
+            if (!knownLocations.includes(updatedBeaconPos.join(','))) {
+              connectedBeacons.push(beacon);
+            }
+          });
+          processedScanners++;
+          console.log('Processed scanners: ' + processedScanners + ' / ' + (scanners.length - 1));
+        }
+      }
+    })
+  }
+
+  console.log(connectedBeacons.length);
+  return scanners.map(s => s.position);
+}
+
+function getScannersSpread(positions) {
+  let maxSpread = 0;
+  for (let i = 0; i < positions.length - 1; i++) {
+    for (let j = i + 1; j < positions.length; j++) {
+      const distance = Math.abs(positions[i][0] - positions[j][0]) + Math.abs(positions[i][1] - positions[j][1]) + Math.abs(positions[i][2] - positions[j][2]);
+      maxSpread = Math.max(maxSpread, distance);
+    }
+  }
+  console.log(maxSpread);
+}
+
+// Day 20
+let [day20_algorithm, day20_image] = fs.readFileSync('./2021/day20.txt', 'utf-8').split('\n\n');
+day20_image = day20_image.split('\n').map(row => (row.split('')));
+
+function countLitPixels(algorithm, startImage, steps) {
+  let pixels = {};
+
+  for (let y = 0; y < startImage.length; y++) {
+    for (let x = 0; x < startImage[0].length; x++) {
+      const pos = `${x}x${y}`;
+      if (startImage[y][x] === '#') pixels[pos] = '1';
+      else pixels[pos] = '0';
+    }
+  }
+
+  let lowest = 0;
+  let highest = startImage.length - 1;
+  for (let step = 1; step <= steps; step++) {
+    const newPixels = {};
+    lowest--;
+    highest++;
+
+    for (let x = lowest; x <= highest; x++) {
+      for (let y = lowest; y <= highest; y++) {
+        let code = '';
+        if (pixels[`${x-1}x${y-1}`]) code += pixels[`${x-1}x${y-1}`];
+        else code += step % 2 === 0 ? '1' : '0';
+        if (pixels[`${x}x${y-1}`]) code += pixels[`${x}x${y-1}`];
+        else code += step % 2 === 0 ? '1' : '0';
+        if (pixels[`${x+1}x${y-1}`]) code += pixels[`${x+1}x${y-1}`];
+        else code += step % 2 === 0 ? '1' : '0';
+        if (pixels[`${x-1}x${y}`]) code += pixels[`${x-1}x${y}`];
+        else code += step % 2 === 0 ? '1' : '0';
+        if (pixels[`${x}x${y}`]) code += pixels[`${x}x${y}`];
+        else code += step % 2 === 0 ? '1' : '0';
+        if (pixels[`${x+1}x${y}`]) code += pixels[`${x+1}x${y}`];
+        else code += step % 2 === 0 ? '1' : '0';
+        if (pixels[`${x-1}x${y+1}`]) code += pixels[`${x-1}x${y+1}`];
+        else code += step % 2 === 0 ? '1' : '0';
+        if (pixels[`${x}x${y+1}`]) code += pixels[`${x}x${y+1}`];
+        else code += step % 2 === 0 ? '1' : '0';
+        if (pixels[`${x+1}x${y+1}`]) code += pixels[`${x+1}x${y+1}`];
+        else code += step % 2 === 0 ? '1' : '0';
+
+        const id = parseInt(code, 2);
+        newPixels[`${x}x${y}`] = algorithm[id] === '#' ? '1' : '0';
+      }
+    }
+
+    pixels = { ...newPixels };
+  }
+
+  console.log(Object.values(pixels).reduce((a, b) => a + Number(b), 0));
+}
+
+// Day 21
+const day21_positions = fs.readFileSync('./2021/day21.txt', 'utf-8').split('\n');
+
+function playDiceGame(startPositions) {
+  let player1Position = Number(startPositions[0][startPositions[0].length - 1]);
+  let player2Position = Number(startPositions[1][startPositions[1].length - 1]);
+  const scores = [0, 0];
+  let nextDice = 1;
+  let turn = 1
+  let throws = 0;
+
+  const getNextDice = () => {
+    throws++;
+    nextDice++;
+    if (nextDice > 100) nextDice -= 100;
+  }
+
+  while (scores[0] < 1000 && scores[1] < 1000) {
+    let toAdd = nextDice;
+    getNextDice();
+    toAdd += nextDice;
+    getNextDice();
+    toAdd += nextDice;
+    getNextDice();
+
+    if (turn === 1) {
+      let newPosition = (player1Position + toAdd) % 10;
+      if (newPosition === 0) newPosition = 10;
+
+      player1Position = newPosition;
+      scores[0] += newPosition;
+
+      turn = 2;
+    } else {
+      let newPosition = (player2Position + toAdd) % 10;
+      if (newPosition === 0) newPosition = 10;
+
+      player2Position = newPosition;
+      scores[1] += newPosition;
+
+      turn = 1;
+    }
+  }
+
+  console.log(scores.find(sc => sc < 1000) * throws);
+}
+
+function playQuantumDiceGame(startPositions) {
+  const player1Position = Number(startPositions[0][startPositions[0].length - 1]);
+  const player2Position = Number(startPositions[1][startPositions[1].length - 1]);
+
+  // There are 27 possibilites that can give a sum between 3 and 9
+  const possibilities = {
+    3: 1,
+    4: 3,
+    5: 6,
+    6: 7,
+    7: 6,
+    8: 3,
+    9: 1,
+  };
+
+  let player1Wins = 0;
+  let player2Wins = 0;
+
+  const history = {};
+
+  const dfs = (pos1, pos2, score1, score2, turn, universes) => {
+    const thisData = [pos1, pos2, score1, score2, turn, universes].toString();
+    if (history[thisData]) {
+      const result = history[thisData];
+      player1Wins += result[0];
+      player2Wins += result[1];
+      return result;
+    }
+
+    const results = [0, 0];
+
+    Object.entries(possibilities).forEach(([sum, variations]) => {
+      if (turn === 1) {
+        newPos1 = (pos1 + Number(sum)) % 10;
+        if (newPos1 === 0) newPos1 = 10;
+        newScore1 = score1 + newPos1;
+        newUniverses = universes * variations;
+
+        if (newScore1 >= 21) {
+          player1Wins += newUniverses;
+          results[0] += newUniverses;
+          return;
+        }
+        const otherRes = dfs(newPos1, pos2, newScore1, score2, 2, newUniverses);
+        results[0] += otherRes[0];
+        results[1] += otherRes[1];
+      } else {
+        newPos2 = (pos2 + Number(sum)) % 10;
+        if (newPos2 === 0) newPos2 = 10;
+        newScore2 = score2 + newPos2;
+        newUniverses = universes * variations;
+
+        if (newScore2 >= 21) {
+          player2Wins += newUniverses;
+          results[1] += newUniverses;
+          return;
+        }
+        const otherRes = dfs(pos1, newPos2, score1, newScore2, 1, newUniverses);
+        results[0] += otherRes[0];
+        results[1] += otherRes[1];
+      }
+    });
+
+    history[thisData] = results;
+    return results;
+  }
+
+  dfs(player1Position, player2Position, 0, 0, 1, 1);
+
+  console.log(Math.max(player1Wins, player2Wins));
+}
+
+// Day 22
+const day22_instructions = fs.readFileSync('./2021/day22.txt', 'utf-8').split('\n');
+
+function addRange(ranges, rangeToAdd) {
+  const allRanges = [...JSON.parse(JSON.stringify(ranges)), rangeToAdd];
+  allRanges.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  return allRanges.reduce((ranges, newRange) => {
+    const lastRange = ranges[ranges.length - 1] || [];
+    if (lastRange.length > 0 && newRange[0] <= lastRange[1] + 1) { // last +1 because [2,3] & [4,5] can be combined
+      // connecting 2 ranges into 1
+      if (lastRange[1] < newRange[1]) {
+        lastRange[1] = newRange[1];
+      }
+      return ranges;
+    }
+    // leaving 2 ranges
+    return ranges.concat([newRange]);
+  }, []);
+}
+
+function removeRange(ranges, rangeToRemove) {
+  const rInMiddle = [];
+  const mutatedRanges = JSON.parse(JSON.stringify(ranges)).map(range => {
+    if (range[0] > rangeToRemove[1] || range[1] < rangeToRemove[0]) return range;
+    if (range[0] >= rangeToRemove[0] && range[1] <= rangeToRemove[1]) return [];
+    if (range[0] < rangeToRemove[0] && range[1] > rangeToRemove[1]) {
+      const first = [range[0], rangeToRemove[0] - 1];
+      const second = [rangeToRemove[1] + 1, range[1]];
+      rInMiddle.push(first);
+      return second;
+    }
+    if (range[0] <= rangeToRemove[1] && range[1] > rangeToRemove[1]) {
+      range[0] = rangeToRemove[1] + 1;
+      return range;
+    }
+    if (range[1] >= rangeToRemove[0]) {
+      range[1] = rangeToRemove[0] - 1;
+      return range;
+    }
+  });
+  mutatedRanges.push(...rInMiddle);
+
+  return mutatedRanges.sort((a, b) => a[0] - b[0] || a[1] - b[1]).filter(r => r.length > 0);
+}
+
+function findGapsInMiddle(ranges, rangeToAdd) {
+  const gaps = [];
+  for (let x = 0; x < ranges.length - 1; x++) {
+    if (ranges[x][1] + 1 === ranges[x+1][0] || rangeToAdd[0] >= ranges[x+1][0]) continue;
+    if (rangeToAdd[1] <= ranges[x][1] || rangeToAdd[0] >= ranges[ranges.length - 1][0]) break;
+
+    const newGap = [Math.max(ranges[x][1] + 1, rangeToAdd[0]), Math.min(ranges[x+1][0] - 1, rangeToAdd[1])];
+    gaps.push(newGap.join('x'));
+  }
+  return gaps;
+}
+
+function rebootReactor(instructions, ignoreBig = true) {
+  const navs = instructions.map(i => i.match(/-?[0-9]+/g).map(Number));
+  const cubes = {};
+
+  instructions.forEach((inst, id) => {
+    if (!ignoreBig) console.log(`Calc... ${id}/${instructions.length} = ${((id/instructions.length*100).toFixed(2))}%`);
+    const nav = navs[id];
+    if (ignoreBig && nav.some(n => n < -50 || n > 50)) return;
+
+    for (let z = nav[4]; z <= nav[5]; z++) {
+      if (!cubes[z]) {
+        const yRange = [nav[2], nav[3]].join('x');
+        cubes[z] = { [yRange]: [] };
+        if (inst.startsWith('on')) {
+          cubes[z][yRange] = addRange([], [nav[0], nav[1]]);
+        }
+      } else {
+        const updatedZ = {};
+
+        if (inst.startsWith('on')) {
+          const yRanges = Object.keys(cubes[z]).map(range => range.split('x').map(Number));
+          yRanges.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+          const gaps = findGapsInMiddle(yRanges, [nav[2], nav[3]]);
+
+          gaps.forEach(gap => {
+            updatedZ[gap] = addRange([], [nav[0], nav[1]]);
+          });
+        }
+
+        Object.entries(cubes[z]).forEach(([y, xRanges], id) => {
+          const yRange = y.split('x').map(Number);
+
+          // Check left overflow
+          if (id === 0 && yRange[0] > nav[2]) {
+            if (inst.startsWith('on')) {
+              const newYRange = [nav[2], Math.min(yRange[0] - 1, nav[3])].join('x');
+              updatedZ[newYRange] = addRange([], [nav[0], nav[1]]);
+            }
+          }
+          // Check right overflow
+          if (id === Object.keys(cubes[z]).length - 1 && yRange[1] < nav[3]) {
+            if (inst.startsWith('on')) {
+              const newYRange = [Math.max(yRange[1] + 1, nav[2]), nav[3]].join('x');
+              updatedZ[newYRange] = addRange([], [nav[0], nav[1]]);
+            }
+          }
+
+          // Check if this range is outside new range
+          if (yRange[0] > nav[3] || yRange[1] < nav[2]) {
+            updatedZ[y] = xRanges;
+          }
+          // Check if this whole range should be replaced
+          else if (yRange[0] >= nav[2] && yRange[1] <= nav[3]) {
+            if (inst.startsWith('on')) {
+              updatedZ[y] = addRange(xRanges, [nav[0], nav[1]]);
+            } else {
+              updatedZ[y] = removeRange(xRanges, [nav[0], nav[1]]);
+            }
+          }
+          // Check if only middle part should be replaced
+          else if (yRange[0] < nav[2] && yRange[1] > nav[3]) {
+            const leftUnchanged = [yRange[0], nav[2] - 1].join('x');
+            updatedZ[leftUnchanged] = xRanges;
+            const rightUnchanged = [nav[3] + 1, yRange[1]].join('x');
+            updatedZ[rightUnchanged] = xRanges;
+
+            const updatedY = [nav[2], nav[3]].join('x');
+            if (inst.startsWith('on')) {
+              updatedZ[updatedY] = addRange(xRanges, [nav[0], nav[1]]);
+            } else {
+              updatedZ[updatedY] = removeRange(xRanges, [nav[0], nav[1]]);
+            }
+          }
+          // Check if only left part should be replaced
+          else if (yRange[0] >= nav[2] && yRange[0] <= nav[3] && yRange[1] > nav[3]) {
+            const rightUnchanged = [nav[3] + 1, yRange[1]].join('x');
+            updatedZ[rightUnchanged] = xRanges;
+
+            const updatedY = [yRange[0], nav[3]].join('x');
+            if (inst.startsWith('on')) {
+              updatedZ[updatedY] = addRange(xRanges, [nav[0], nav[1]]);
+            } else {
+              updatedZ[updatedY] = removeRange(xRanges, [nav[0], nav[1]]);
+            }
+          }
+          // Check if only right part should be replaced
+          else {
+            const leftUnchanged = [yRange[0], nav[2] - 1].join('x');
+            updatedZ[leftUnchanged] = xRanges;
+
+            const updatedY = [nav[2], yRange[1]].join('x');
+            if (inst.startsWith('on')) {
+              updatedZ[updatedY] = addRange(xRanges, [nav[0], nav[1]]);
+            } else {
+              updatedZ[updatedY] = removeRange(xRanges, [nav[0], nav[1]]);
+            }
+          }
+        });
+
+        let zData = Object.entries(updatedZ).sort((a, b) => a[0].split('x').map(Number)[0] - b[0].split('x').map(Number)[0]);
+        const compressedZData = zData.reduce((ranges, newRange) => {
+          const lastRange = ranges[ranges.length - 1] || [];
+          if (lastRange.length > 0 &&
+            lastRange[0].split('x').map(Number)[1] + 1 === newRange[0].split('x').map(Number)[0] &&
+            JSON.stringify(lastRange[1]) === JSON.stringify(newRange[1])) {
+            lastRange[0] = `${lastRange[0].split('x')[0]}x${newRange[0].split('x')[1]}`;
+            return ranges;
+          }
+          return ranges.concat([newRange]);
+        }, []);
+
+        cubes[z] = Object.fromEntries(compressedZData);
+      }
+    }
+  });
+  console.log('All cubes set up, summing...')
+
+  let count = 0;
+
+  Object.values(cubes).forEach((yDimension) => {
+    Object.entries(yDimension).forEach(([yRange, xRanges]) => {
+      const y = yRange.split('x').map(Number);
+      const repeats = Math.abs(y[1] - y[0]) + 1;
+      xRanges.forEach(range => {
+        count += (Math.abs(range[1] - range[0]) + 1) * repeats;
+      });
+    })
+  })
+
+  console.log(count);
+}
+
+// Day 23
+// Too lazy to write input parser for this day.
+const day23_amphipods = { A: ["A","D"], B: ["C","D"], C: ["B","A"], D: ["B","C"], hailway: "...........".split("") };
+const day23_amphipods_part2 = { A: ["A","D","D","D"], B: ["C","C","B","D"], C: ["B","B","A","A"], D: ["B","A","C","C"], hailway: "...........".split("") };
+
+function organizeAmphipods(positions, amphPerRoom) {
+  const queue = { 0: [positions] };
+  let energy = 0;
+  let amphipodsOrganized = false;
+  const savedMoves = [];
+  const energies = { A: 1, B: 10, C: 100, D: 1000 };
+
+  const clearQueue = () => {
+    queue[energy].shift();
+    if (queue[energy].length === 0) {
+      delete queue[energy];
+      energy++;
+    }
+  }
+
+  const addToQueue = (newEnergy, data) => {
+    if (!queue[energy + newEnergy]) queue[energy + newEnergy] = [];
+    queue[energy + newEnergy].push(data);
+  }
+
+  const checkGoingOutOfRoom = (thisMove, room, startPos) => {
+    if (thisMove[room].join('') !== room.repeat(amphPerRoom) && thisMove[room].length > 0) {
+      const movingAmph = thisMove[room][0];
+      if (thisMove[room].every(a => a === room)) return;
+      const energyPerMove = energies[movingAmph];
+
+      // Going left
+      let moves = amphPerRoom + 1 - thisMove[room].length // Moving out of room;
+      let position = startPos;
+      while (position > 0 && thisMove.hailway[position - 1] === '.') {
+        position--;
+        moves++;
+        if (position === 2) checkGoingToRoom(thisMove, 'A', movingAmph, moves, energyPerMove, room);
+        else if (position === 4) checkGoingToRoom(thisMove, 'B', movingAmph, moves, energyPerMove, room);
+        else if (position === 6) checkGoingToRoom(thisMove, 'C', movingAmph, moves, energyPerMove, room);
+        else {
+          const updatedHailway = [...thisMove.hailway]
+          updatedHailway[position] = movingAmph;
+          addToQueue(moves * energyPerMove, { ...thisMove, [room]: thisMove[room].slice(1), hailway: updatedHailway });
+        }
+      }
+
+      // Going right
+      moves = amphPerRoom + 1 - thisMove[room].length;
+      position = startPos;
+      while (position < 10 && thisMove.hailway[position + 1] === '.') {
+        position++;
+        moves++;
+        if (position === 4) checkGoingToRoom(thisMove, 'B', movingAmph, moves, energyPerMove, room);
+        else if (position === 6) checkGoingToRoom(thisMove, 'C', movingAmph, moves, energyPerMove, room);
+        else if (position === 8) checkGoingToRoom(thisMove, 'D', movingAmph, moves, energyPerMove, room);
+        else {
+          const updatedHailway = [...thisMove.hailway]
+          updatedHailway[position] = movingAmph;
+          addToQueue(moves * energyPerMove, { ...thisMove, [room]: thisMove[room].slice(1), hailway: updatedHailway });
+        }
+      }
+    }
+  }
+
+  const checkGoingToRoom = (thisMove, room, movingAmph, moves, energyPerMove, fromRoom) => {
+    if ((thisMove[room].length === 0 || (thisMove[room].length === 1 && thisMove[room][0] === room)) && movingAmph === room) {
+      const energySpent = (moves + (amphPerRoom - thisMove[room].length)) * energyPerMove;
+      const updatedRoom = [...thisMove[room]];
+      updatedRoom.unshift(movingAmph);
+      addToQueue(energySpent, { ...thisMove, [room]: updatedRoom, [fromRoom]: thisMove[fromRoom].slice(1) });
+    }
+  }
+
+  const checkMovingFromHailway = (thisMove, amph, position, destinationP) => {
+    const energyPerMove = energies[amph];
+    if (thisMove[amph].length === 0 || thisMove[amph].every(p => p === amph)) {
+      let moves;
+      if (position < destinationP && thisMove.hailway.slice(position + 1, destinationP + 1).every(p => p === '.')) {
+        moves = destinationP - position + (amphPerRoom - thisMove[amph].length);
+      }
+      if (position > destinationP && thisMove.hailway.slice(destinationP, position).every(p => p === '.')) {
+        moves = position - destinationP + (amphPerRoom - thisMove[amph].length);
+      }
+      if (moves) {
+        const updatedHailway = [...thisMove.hailway];
+        updatedHailway[position] = '.';
+        addToQueue(moves * energyPerMove, { ...thisMove, [amph]: [amph, ...thisMove[amph]], hailway: updatedHailway })
+      }
+    }
+  }
+
+  while (!amphipodsOrganized) {
+    if (Object.keys(queue).length === 0) {
+      console.log('ALERT! No more options!')
+      break;
+    }
+    if (!queue[energy]) {
+      energy++;
+      continue;
+    }
+
+    const thisMove = queue[energy][0];
+    if (thisMove.A.join('') === 'A'.repeat(amphPerRoom) && thisMove.B.join('') === 'B'.repeat(amphPerRoom) && thisMove.C.join('') === 'C'.repeat(amphPerRoom) && thisMove.D.join('') === 'D'.repeat(amphPerRoom)) {
+      amphipodsOrganized = true;
+      break;
+    }
+
+    const data = JSON.stringify(thisMove);
+    if (savedMoves.includes(data)) {
+      clearQueue();
+      continue;
+    }
+    savedMoves.push(data);
+
+    checkGoingOutOfRoom(thisMove, 'A', 2);
+    checkGoingOutOfRoom(thisMove, 'B', 4);
+    checkGoingOutOfRoom(thisMove, 'C', 6);
+    checkGoingOutOfRoom(thisMove, 'D', 8);
+    // Going from hailway
+    const destinations = { A: 2, B: 4, C: 6, D: 8 };
+    thisMove.hailway.forEach((point, position) => {
+      if (point === '.') return;
+      checkMovingFromHailway(thisMove, point, position, destinations[point]);
+    });
+
+    clearQueue();
+  }
+
+  console.log(energy);
+}
+
+// Day 24
 
 
 
@@ -1304,3 +1941,28 @@ function findBiggestMagnitudeOfTwoSnailNumbers(numbers) {
 // findMagnitudeOfSnailNumbers(day18_snail_numbers);
 // console.log('Day 18, part 2:');
 // findBiggestMagnitudeOfTwoSnailNumbers(day18_snail_numbers);
+
+// console.log('Day 19, part 1 (this will take ~4-5 minutes):');
+// const scannersPositions = findDistinctBeacons(day19_scanners);
+// console.log('Day 19, part 2:');
+// getScannersSpread(scannersPositions);
+
+// console.log('Day 20, part 1:');
+// countLitPixels(day20_algorithm, day20_image, 2);
+// console.log('Day 20, part 2:');
+// countLitPixels(day20_algorithm, day20_image, 50);
+
+// console.log('Day 21, part 1:');
+// playDiceGame(day21_positions);
+// console.log('Day 21, part 2:');
+// playQuantumDiceGame(day21_positions);
+
+// console.log('Day 22, part 1:');
+// rebootReactor(day22_instructions);
+// console.log('Day 22, part 2 (this takes about 40 minutes):');
+// rebootReactor(day22_instructions, false);
+
+// console.log('Day 23, part 1 (this will take ~3 minutes):');
+// organizeAmphipods(day23_amphipods, 2);
+// console.log('Day 23, part 2 (this will take ~3 minutes):');
+// organizeAmphipods(day23_amphipods_part2, 4);
