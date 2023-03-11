@@ -1852,9 +1852,118 @@ function organizeAmphipods(positions, amphPerRoom) {
 }
 
 // Day 24
+const day24_instructions = fs.readFileSync('./2021/day24.txt', 'utf-8').split('\n');
 
+/*
+  For this task, it was required to reverse-engineer the ALU system and check what's going on inside.
+  There were many operations that did nothing at all, so instead of interpreting real input, I deleted the code that ran all operations and just wrote down everything that matters, hardcoding everything.
+  It's ugly, but it works and it's fast, so I'm fine with it xD
+*/
+function findMONADnumbers() {
+  let smallest = Number.MAX_SAFE_INTEGER;
+  let biggest = 0;
 
+  const addNum = (z, input) => {
+    if (input.length === 14) {
+      const monad = Number(input);
+      if (monad < smallest) smallest = monad;
+      if (monad > biggest) biggest = monad;
+    }
 
+    for (let num = 1; num <= 9; num++) {
+      if (input.length === 0) {
+        addNum(num + 6, input + num);
+      } else if (input.length === 1) {
+        addNum(z * 26 + num + 6, input + num);
+      } else if (input.length === 2) {
+        addNum(z * 26 + num + 3, input + num);
+      } else if (input.length === 3) {
+        let checkX = z % 26 - 11;
+        if (checkX !== num) continue;
+        addNum(Math.floor(z / 26), input + num);
+      } else if (input.length === 4) {
+        addNum(z * 26 + num + 9, input + num);
+      } else if (input.length === 5) {
+        let checkX = z % 26 - 1;
+        if (checkX !== num) continue;
+        addNum(Math.floor(z / 26), input + num);
+      } else if (input.length === 6) {
+        addNum(z * 26 + num + 13, input + num);
+      } else if (input.length === 7) {
+        addNum(z * 26 + num + 6, input + num);
+      } else if (input.length === 8) {
+        let checkX = z % 26;
+        if (checkX !== num) continue;
+        addNum(Math.floor(z / 26), input + num);
+      } else if (input.length === 9) {
+        addNum(z * 26 + num + 10, input + num);
+      } else if (input.length === 10) {
+        let checkX = z % 26 - 5;
+        if (checkX !== num) continue;
+        addNum(Math.floor(z / 26), input + num);
+      } else if (input.length === 11) {
+        let checkX = z % 26 - 16;
+        if (checkX !== num) continue;
+        addNum(Math.floor(z / 26), input + num);
+      } else if (input.length === 12) {
+        let checkX = z % 26 - 7;
+        if (checkX !== num) continue;
+        addNum(Math.floor(z / 26), input + num);
+      } else if (input.length === 13) {
+        let checkX = z % 26 - 11;
+        if (checkX !== num) continue;
+        addNum(Math.floor(z / 26), input + num);
+      }
+    }
+  }
+
+  addNum(0, '');
+
+  console.log(biggest);
+  console.log(smallest);
+}
+
+// Day 25
+const day25_cucumbers = fs.readFileSync('./2021/day25.txt', 'utf-8').split('\n').map(x => x.split(''));
+
+function moveSeaCucumbers(cucumbers) {
+  let stepsPassed = 0;
+  let wasMove = true;
+
+  while (wasMove) {
+    wasMove = false;
+    let updatedMap = JSON.parse(JSON.stringify(cucumbers));
+
+    for (let y = 0; y < cucumbers.length; y++) {
+      for (let x = 0; x < cucumbers[0].length; x++) {
+        if (cucumbers[y][x] === '>') {
+          if (cucumbers[y][(x + 1) % cucumbers[0].length] === '.') {
+            updatedMap[y][(x + 1) % cucumbers[0].length] = '>';
+            updatedMap[y][x] = '.';
+            wasMove = true;
+          }
+        }
+      }
+    }
+    cucumbers = updatedMap;
+    updatedMap = JSON.parse(JSON.stringify(cucumbers));
+    for (let y = 0; y < cucumbers.length; y++) {
+      for (let x = 0; x < cucumbers[0].length; x++) {
+        if (cucumbers[y][x] === 'v') {
+          if (cucumbers[(y + 1) % cucumbers.length][x] === '.') {
+            updatedMap[(y + 1) % cucumbers.length][x] = 'v';
+            updatedMap[y][x] = '.';
+            wasMove = true;
+          }
+        }
+      }
+    }
+    cucumbers = updatedMap;
+    stepsPassed++;
+  }
+
+  console.log(stepsPassed);
+}
 
 // -----Answers for solved days-----
 // Uncomment proper lines to get them
@@ -1966,3 +2075,9 @@ function organizeAmphipods(positions, amphPerRoom) {
 // organizeAmphipods(day23_amphipods, 2);
 // console.log('Day 23, part 2 (this will take ~3 minutes):');
 // organizeAmphipods(day23_amphipods_part2, 4);
+
+// console.log('Day 24, part 1 & 2:');
+// findMONADnumbers();
+
+// console.log('Day 25:');
+// moveSeaCucumbers(day25_cucumbers);
