@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "decimal.js": "^10.4.3",
-    "node-dijkstra": "^2.5.0"
+    "node-dijkstra": "^2.5.0",
+    "prompt-sync": "^4.2.0"
   }
 }

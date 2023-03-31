@@ -2,7 +2,7 @@ const fs = require("fs");
 const permutations = require("./permutations");
 
 // Computer created during day 5 and expanded on each other day when needed.
-// So far used in days: 2, 5, 7, 9, 11, 13, 15, 17, 19
+// Used in days: 2, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23 & 25
 class IntCodeComputer {
   constructor(
     opcode, // number[]
@@ -21,6 +21,8 @@ class IntCodeComputer {
   }
 
   getOutput() {
+    if (!this.output) return null;
+
     if (this.preserveOutput) {
       const toReturn = [...this.output];
       this.output = null;
@@ -1714,9 +1716,252 @@ function shuffleCards(shuffles, cardsCount) {
   console.log(deck.indexOf(2019));
 }
 
-// Part 2 ???
+/*
+  I had to cheat a little in part 2 and look for a tutorial how to solve it as it required quite advanced math. 
+  Found it here: https://codeforces.com/blog/entry/72593
+  In later parts, this algorithm uses "modular multiplicative inverse" but in easier version because shufflesCount is a prime number
+  More info -> https://www.geeksforgeeks.org/multiplicative-inverse-under-modulo-m/
+*/
+const modularPow = require("./modularPow");
+function composeLCF(LCFa, LCFb, mod) {
+  return { 
+    a: (LCFa.a * LCFb.a) % mod,
+    b: (LCFa.b * LCFb.a + LCFb.b) % mod 
+  }
+}
 
+function shuffleMassiveAmountOfCards(shuffles, cardsCount, shufflesCount) {
+  const NUMBER_REGEX = /-?[0-9]+/g;
+  cardsCount = BigInt(cardsCount);
+  shufflesCount = BigInt(shufflesCount);
+  // LCF - linear congruential function, in a form of ax + b mod m;
+  let LCF = { a: 1n, b: 0n };
 
+  shuffles.forEach(shuffle => {
+    if (shuffle === 'deal into new stack') {
+      LCF = composeLCF(LCF, { a: -1n, b: -1n }, cardsCount);
+    } else if (shuffle.startsWith('cut')) {
+      const amount = BigInt(shuffle.match(NUMBER_REGEX)[0]);
+      LCF = composeLCF(LCF, { a: 1n, b: -1n * amount }, cardsCount);
+    } else {
+      const inc = BigInt(shuffle.match(NUMBER_REGEX)[0]);
+      LCF = composeLCF(LCF, { a: inc, b: 0n }, cardsCount);
+    }
+  });
+
+  // This would be a solution for part 1 using this method, but I wanted to keep my original solution:
+  // console.log((2019n * LCF.a + LCF.b) % cardsCount)
+
+  const poweredA = BigInt(modularPow(LCF.a, shufflesCount, cardsCount));
+  const poweredLCF = {
+    a: poweredA,
+    b: (
+      ((LCF.b * (1n - poweredA)) % cardsCount) *
+      BigInt(modularPow(1n - LCF.a, cardsCount - 2n, cardsCount))
+    ) % cardsCount
+  }
+
+  const pos = (
+    ((2020n - poweredLCF.b) % cardsCount) *
+    BigInt(modularPow(poweredLCF.a, cardsCount - 2n, cardsCount))
+  ) % cardsCount;
+
+  if (pos < 0) {
+    console.log(Number(cardsCount + pos));
+  } else {
+    console.log(Number(pos));
+  }
+}
+
+// Day 23
+const day23_opcodes = fs.readFileSync('./2019/day23.txt', 'utf-8').split(',').map(Number);
+
+function buildNetwork(opcode) {
+  const computers = [];
+  for (let x = 0; x < 50; x++) {
+    computers.push(new IntCodeComputer([...opcode], [x], true));
+  }
+
+  const queue = {};
+  let address255 = null;
+  let last2Sent = 99999999;
+  let lastSent = 88888888; // random numbers to make sure that they'll be different than the ones sent to 255
+
+  while (lastSent !== last2Sent) {
+    let addedInputs = 0;
+
+    computers.forEach((comp, id) => {
+      comp.runComputer();
+      
+      if (queue[id]) {
+        addedInputs++;
+        comp.addInput(queue[id]);
+        delete queue[id];
+      } else {
+        comp.addInput(-1);
+      }
+
+      comp.runComputer();
+      const out = comp.getOutput();
+      if (out) {
+        for (let x = 0; x < out.length; x += 3) {
+          if (out[x] === 255) {
+            if (!address255) {
+              console.log(out[x + 2]); // Part 1
+            }
+            address255 = [out[x + 1], out[x + 2]];
+          }
+
+          if (!queue[out[x]]) queue[out[x]] = [];
+          queue[out[x]].push(out[x+1]);
+          queue[out[x]].push(out[x+2]);
+        }
+      }
+    });
+
+    if (addedInputs === 0) {
+      queue[0] = [...address255];
+      last2Sent = lastSent;
+      lastSent = address255[1];
+    }
+  }
+
+  console.log(last2Sent);
+}
+
+// Day 24
+const day24_bugs = fs.readFileSync('./2019/day24.txt', 'utf-8').split('\n').map(row => row.split(''));
+
+function observeBugs(bugs) {
+  const bugsHistory = new Set([JSON.stringify(bugs)]);
+  let lastSize = 0;
+  let newSize = 1;
+
+  while (lastSize !== newSize) {
+    const bugsTemp = JSON.parse(JSON.stringify(bugs));
+
+    for (let y = 0; y < 5; y++) {
+      for (let x = 0; x < 5; x++) {
+        let adjacent = 0;
+        if (y > 0 && bugs[y - 1][x] === '#') adjacent++; 
+        if (x > 0 && bugs[y][x - 1] === '#') adjacent++; 
+        if (x < 4 && bugs[y][x + 1] === '#') adjacent++; 
+        if (y < 4 && bugs[y + 1][x] === '#') adjacent++;
+
+        if (bugs[y][x] === '.') {
+          if (adjacent === 1 || adjacent === 2) bugsTemp[y][x] = '#';
+        } else {
+          if (adjacent !== 1) bugsTemp[y][x] = '.'
+        }
+      }
+    }
+
+    bugs = bugsTemp;
+    bugsHistory.add(JSON.stringify(bugs));
+    lastSize = newSize;
+    newSize = bugsHistory.size;
+  }
+
+  let biodiversityRating = 0;
+  for (let x = 0; x < 25; x++) {
+    if (bugs[Math.floor(x / 5)][x % 5] === '#') biodiversityRating += 2 ** x;
+  }
+  console.log(biodiversityRating);
+}
+
+function countBugsOnInfiniteGrid(bugs) {
+  const emptyGrid = '[[".",".",".",".","."],[".",".",".",".","."],[".",".",".",".","."],[".",".",".",".","."],[".",".",".",".","."]]'
+  let infiniteBugs = [bugs];
+
+  for (let minute = 1; minute <= 200; minute++) {
+    if (JSON.stringify(infiniteBugs[0]) !== emptyGrid) {
+      infiniteBugs.unshift(JSON.parse(emptyGrid));
+    }
+    if (JSON.stringify(infiniteBugs[infiniteBugs.length - 1]) !== emptyGrid) {
+      infiniteBugs.push(JSON.parse(emptyGrid));
+    }
+    const bugsTemp = JSON.parse(JSON.stringify(infiniteBugs));
+
+    for (let z = 0; z < infiniteBugs.length; z++) {
+      for (let y = 0; y < 5; y++) {
+        for (let x = 0; x < 5; x++) {
+          if (
+            (y === 2 && x === 2) || 
+            (z === 0 && (y === 0 || y === 4 || x === 0 || x === 4)) ||
+            (z === infiniteBugs.length - 1 && ((x !== 0 && x !== 4) && (y !== 0 && y !== 4)))
+          ) continue;
+          let adjacent = 0;
+
+          // checking up
+          if (y === 0) {
+            if (infiniteBugs[z-1][1][2] === '#') adjacent++;
+          } else if (y === 3 && x === 2) {
+            const upRow = infiniteBugs[z+1][4];
+            adjacent += upRow.filter(x => x === '#').length;
+          } else {
+            if (infiniteBugs[z][y - 1][x] === '#') adjacent++;
+          }
+          // left
+          if (x === 0) {
+            if (infiniteBugs[z-1][2][1] === '#') adjacent++;
+          } else if (y === 2 && x === 3) {
+            const leftRow = [infiniteBugs[z+1][0][4], infiniteBugs[z+1][1][4], infiniteBugs[z+1][2][4], infiniteBugs[z+1][3][4], infiniteBugs[z+1][4][4]];
+            adjacent += leftRow.filter(x => x === '#').length;
+          } else {
+            if (infiniteBugs[z][y][x - 1] === '#') adjacent++;
+          }
+          // down
+          if (y === 4) {
+            if (infiniteBugs[z-1][3][2] === '#') adjacent++;
+          } else if (y === 1 && x === 2) {
+            const downRow = infiniteBugs[z+1][0];
+            adjacent += downRow.filter(x => x === '#').length;
+          } else {
+            if (infiniteBugs[z][y + 1][x] === '#') adjacent++;
+          }
+          // right
+          if (x === 4) {
+            if (infiniteBugs[z-1][2][3] === '#') adjacent++;
+          } else if (y === 2 && x ===1) {
+            const rightRow = [infiniteBugs[z+1][0][0], infiniteBugs[z+1][1][0], infiniteBugs[z+1][2][0], infiniteBugs[z+1][3][0], infiniteBugs[z+1][4][0]];
+            adjacent += rightRow.filter(x => x === '#').length;
+          } else {
+            if (infiniteBugs[z][y][x + 1] === '#') adjacent++;
+          }
+
+          if (infiniteBugs[z][y][x] === '.') {
+            if (adjacent === 1 || adjacent === 2) bugsTemp[z][y][x] = '#';
+          } else {
+            if (adjacent !== 1) bugsTemp[z][y][x] = '.'
+          }
+        }
+      }
+    }
+
+    infiniteBugs = bugsTemp;
+  }
+
+  const allBugs = JSON.stringify(infiniteBugs).split('').filter(x => x === '#');
+  console.log(allBugs.length);
+}
+
+// Day 25
+const prompt = require('prompt-sync')({sigint: true});
+const day25_opcodes = fs.readFileSync('./2019/day25.txt', 'utf-8').split(',').map(Number);
+
+function giveCommandsToDroid(opcode) {
+  const droid = new IntCodeComputer(opcode, [], true);
+  droid.runComputer();
+
+  while(droid.active) {
+    console.log(droid.getASCIIOutput().join(''));
+    const command = prompt('');
+    droid.addASCIIInput(command); 
+    droid.runComputer();
+  }
+
+  console.log(droid.getASCIIOutput().join(''));
+}
 
 
 // -----Answers for solved days-----
@@ -1831,3 +2076,21 @@ getOffsetFromFFTSignal(phaseXInput, { phase: finishedPhases });
 
 // console.log('Day 22, part 1:');
 // shuffleCards(day22_shuffles, 10007);
+// console.log('Day 22, part 2:');
+// shuffleMassiveAmountOfCards(day22_shuffles, 119315717514047, 101741582076661);
+
+// console.log('Day 23, part 1 & 2:');
+// buildNetwork(day23_opcodes);
+
+// console.log('Day 24, part 1:');
+// observeBugs(JSON.parse(JSON.stringify(day24_bugs)));
+// console.log('Day 24, part 2:');
+// countBugsOnInfiniteGrid(day24_bugs);
+
+// console.log('Day 25 (it is a game that needs to be played by the user):');
+// giveCommandsToDroid(day25_opcodes);
+
+/*
+  Spoiler for the game in last day: 
+  In order to win, you have to find: hypercube, festive hat, shell & astronaut ice cream. Ignore everything else and find room that checks your weight.
+*/
