@@ -9,10 +9,10 @@ This repository contains my solutions to puzzles available on https://adventofco
 [2021] 50*
 [2020] 50*
 [2019] 50*
-[2018] 45*
+[2018] 50*
 [2017] 50*
 [2016] 50*
 [2015] 50*
 
-Total stars: 395*
+Total stars: 400*
 ```

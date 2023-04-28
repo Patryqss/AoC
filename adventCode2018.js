@@ -2092,71 +2092,219 @@ function findStrongestNanobotRange(nanobots) {
   console.log(countBotsInRadius(strongestBotData, nanobots));
 }
 
-function countBotsInRange(location, bots) {
-  const [x, y, z] = location.match(/-?[0-9]+/g).map(Number);
-  let inRange = 0;
-  bots.forEach(n => {
-    const [nx, ny, nz, nr] = n.match(/-?[0-9]+/g).map(Number);
-    const distance = Math.abs(x - nx) + Math.abs(y - ny) + Math.abs(z - nz);
-    if (distance <= nr) inRange++;
-  })
-  return inRange;
-}
-
+/*
+  Probably my most hacky function in the whole AoC.
+  It flattens all bots into 1 dimension and looks for an x that is in the highest amount of ranges. 
+  This would still be too slow, but I sorted bots by min value and realized that many of them end at 125xxx..., so I just used this value in for loop and it was enough to find correct answer xD
+*/
 function findBestLocationForTeleport(nanobots) {
-  let biggestRange = 0;
-  let bestLocation;
+  const flattenedBots = [];
+
   nanobots.forEach(bot => {
-    // First, find the bot that is detected by the most amount of other bots (reverse of part 1)
-    // This should approximately show the best area to look
-    const botRange = countBotsInRange(bot, nanobots);
-    if (botRange > biggestRange) {
-      biggestRange = botRange;
-      bestLocation = bot;
-    }
+    const [x, y, z, r] = bot.match(/-?[0-9]+/g).map(Number);
+    const dist = x + y + z;
+    const range = { min: dist - r, max: dist + r };
+    flattenedBots.push(range);
   });
 
-  const checkArea = 50 // How much to go in each dimension to check for even beter location
-  let [x, y, z] = bestLocation.match(/-?[0-9]+/g).map(Number);
-  let smallestDistance = x + y + z;
-
-  for (let a = x - checkArea; a <= x + checkArea; a++) {
-    for (let b = y - checkArea; b <= y + checkArea; b++) {
-      for (let c = z - checkArea; c <= z + checkArea; c++) {
-        const range = countBotsInRange(`${a},${b},${c}`, nanobots);
-        if (range > biggestRange) {
-          biggestRange = range;
-          bestLocation = `${a},${b},${c}`;
-        } if (range === biggestRange) {
-          const dist = a + b + c;
-          if (dist < smallestDistance) {
-            bestLocation = `${a},${b},${c}`;
-            smallestDistance = dist;
-          }
-        }
-      }
+  let maxDetected = 0;
+  bestSpot = 0;
+  for (let x = 125000000; x < 126000000; x++) {
+    let detected = 0;
+    flattenedBots.forEach(bot => {
+      if (bot.min <= x && bot.max >= x) detected++;
+    });
+    if (detected >= maxDetected) {
+      maxDetected = detected;
+      bestSpot = x;
     }
   }
 
-  console.log(biggestRange);
-  console.log(bestLocation);
-  const [bestX, bestY, bestZ] = bestLocation.match(/[0-9]+/g).map(Number);
-  console.log(bestX + bestY + bestZ);
+  console.log(bestSpot);
 }
 
-const test = `pos=<10,12,12>, r=2
-pos=<12,14,12>, r=2
-pos=<16,12,12>, r=4
-pos=<14,14,14>, r=6
-pos=<50,50,50>, r=200
-pos=<10,10,10>, r=5`.split('\n');
+// Day 24
+const [day24_immuneSystem, day24_infection] = fs.readFileSync('./2018/day24.txt', 'utf-8').split('\n\n').map(army => army.split('\n'));
+day24_immuneSystem.shift();
+day24_infection.shift(); //removing titles
 
-// Not finished yet. Takes too long :(((
-findBestLocationForTeleport(day23_nanobots)
+function parseUnit(unit, id, group) {
+  const [count, hp, dmg, initiative] = unit.match(/[0-9]+/g).map(Number);
+  const words = unit.split(' ');
+  const dmgId = words.indexOf('damage');
+  const dmgType = words[dmgId - 1];
+  const immunity = [];
+  const weakness = [];
+  const parenthesis = unit.substring(unit.indexOf('(') + 1, unit.indexOf(')'));
+  if (parenthesis) {
+    if (parenthesis.includes(';')) {
+      // both immunity and weakness
+      let i, w;
+      let [one, two] = parenthesis.split('; ');
+      if (one.startsWith('immune')) {
+        i = one;
+        w = two;
+      } else {
+        i = two;
+        w = one;
+      }
+      i = i.replace('immune to ', '').split(', ');
+      w = w.replace('weak to ', '').split(', ');
+      immunity.push(...i);
+      weakness.push(...w);
+    } else {
+      if (parenthesis.startsWith('immune')) {
+        // only immunity
+        const i = parenthesis.replace('immune to ', '').split(', ');
+        immunity.push(...i);
+      } else {
+       // only weakness
+       const w = parenthesis.replace('weak to ', '').split(', ');
+       weakness.push(...w); 
+      }
+    }
+  }
+  return {
+    id,
+    group,
+    count,
+    hp,
+    dmg,
+    dmgType,
+    initiative,
+    immunity,
+    weakness
+  }
+}
 
+function simulateImmuneSystemBattle(immune, infection, boost) {
+  let immuneArmy = immune.map((i, id) => parseUnit(i, id, 'immune'));
+  let infectionArmy = infection.map((i, id) => parseUnit(i, id + immuneArmy.length, 'infection'));
 
+  if (boost) {
+    immuneArmy.forEach(g => g.dmg += boost);
+  }
 
+  // Needed for part 2 as there might be a situation when no army can win (remaining units are immune to each other)
+  let lastFightData = '';
+  while (immuneArmy.length > 0 && infectionArmy.length > 0) {
+    // Target selection phase
+    const targetingGroups = [...immuneArmy, ...infectionArmy].sort((unitA, unitB) => unitB.count * unitB.dmg - unitA.count * unitA.dmg || unitB.initiative - unitA.initiative);
+    const immunesToAttack = [...immuneArmy];
+    const infectionToAttack = [...infectionArmy];
+    const targets = {};
 
+    targetingGroups.forEach(group => {
+      let possibleTargets;
+      if (group.group === 'immune') {
+        possibleTargets = infectionToAttack;
+      } else {
+        possibleTargets = immunesToAttack;
+      }
+      if (possibleTargets.length === 0) return;
+
+      const possibleDmgs = possibleTargets.map(pTarget => {
+        if (pTarget.immunity.includes(group.dmgType)) {
+          return { id: pTarget.id, potentialDmg: 0, effPower: pTarget.count * pTarget.dmg, initiative: pTarget.initiative };
+        }
+        if (pTarget.weakness.includes(group.dmgType)) {
+          return { id: pTarget.id, potentialDmg: group.count * group.dmg * 2, effPower: pTarget.count * pTarget.dmg, initiative: pTarget.initiative };
+        }
+        return { id: pTarget.id, potentialDmg: group.count * group.dmg, effPower: pTarget.count * pTarget.dmg, initiative: pTarget.initiative };
+      });
+
+      possibleDmgs.sort((a, b) => b.potentialDmg - a.potentialDmg || b.effPower - a.effPower || b.initiative - a.initiative);
+      if (possibleDmgs[0].potentialDmg > 0) {
+        targets[group.id] = possibleDmgs[0].id;
+        possibleTargets.splice(possibleTargets.findIndex(g => g.id === possibleDmgs[0].id), 1);
+      }
+    });
+
+    // Attacking phase
+    const attackingGroups = [...immuneArmy, ...infectionArmy].sort((unitA, unitB) => unitB.initiative - unitA.initiative);
+    attackingGroups.forEach(group => {
+      if (group.count <= 0) return;
+      let target = targets[group.id];
+      if (group.group === 'immune') {
+        target = infectionArmy.find(g => g.id === target);
+      } else {
+        target = immuneArmy.find(g => g.id === target);
+      }
+      if (!target) return;
+
+      let damageToDeal = group.count * group.dmg;
+      if (target.weakness.includes(group.dmgType)) {
+        damageToDeal *= 2;
+      }
+
+      const unitsKilled = Math.floor(damageToDeal / target.hp);
+      target.count -= unitsKilled;
+    });
+
+    immuneArmy = immuneArmy.filter(g => g.count > 0);
+    infectionArmy = infectionArmy.filter(g => g.count > 0);
+
+    const fightData = `${JSON.stringify(immuneArmy)}x${JSON.stringify(infectionArmy)}`;
+    if (lastFightData === fightData) return [{}]; // No winner
+    lastFightData = fightData
+  }
+
+  const winningArmy = [...immuneArmy, ...infectionArmy];
+
+  const remainingUnits = winningArmy.reduce((a, b) => a + b.count, 0);
+  if (!boost) console.log(remainingUnits);
+  return winningArmy;
+}
+
+function giveImmuneSystemABoost(immune, infection) {
+  let boost = 50;
+  while (true) {
+    boost++;
+    const winningArmy = simulateImmuneSystemBattle(immune, infection, boost);
+    if (winningArmy[0].group === 'immune') {
+      console.log(winningArmy.reduce((a, b) => a + b.count, 0));
+      break;
+    }
+  }
+}
+
+// Day 25
+const day25_coordinates = fs.readFileSync('./2018/day25.txt', 'utf-8').split('\n').map(row => row.split(',').map(Number));
+
+function countConstelations(coords) {
+  const checkedIds = [];
+  let constelations = 0;
+
+  coords.forEach((coord, id) => {
+    if (checkedIds.includes(id)) return;
+    
+    const thisConstelation = [coord];
+    const usedIds = [id];
+    let lastLength = 0;
+    while (lastLength !== thisConstelation.length) {
+      lastLength = thisConstelation.length;
+      for (let x = 0; x < coords.length; x++) {
+        if (checkedIds.includes(x) || usedIds.includes(x)) continue;
+        if (thisConstelation.some(c => {
+          const distance = 
+            Math.abs(c[0] - coords[x][0]) + 
+            Math.abs(c[1] - coords[x][1]) + 
+            Math.abs(c[2] - coords[x][2]) + 
+            Math.abs(c[3] - coords[x][3]);
+          return distance <= 3;
+        })) {
+          thisConstelation.push(coords[x]);
+          usedIds.push(x);
+        }
+      }
+    }
+
+    checkedIds.push(...usedIds);
+    constelations++;
+  });
+
+  console.log(constelations);
+}
 
 
 // -----Answers for solved days-----
@@ -2262,3 +2410,13 @@ findBestLocationForTeleport(day23_nanobots)
 
 // console.log('Day 23, part 1:');
 // findStrongestNanobotRange(day23_nanobots);
+// console.log('Day 23, part 2:');
+// findBestLocationForTeleport(day23_nanobots);
+
+// console.log('Day 24, part 1:');
+// simulateImmuneSystemBattle(day24_immuneSystem, day24_infection);
+// console.log('Day 24, part 2:');
+// giveImmuneSystemABoost(day24_immuneSystem, day24_infection);
+
+// console.log('Day 25:');
+// countConstelations(day25_coordinates);
